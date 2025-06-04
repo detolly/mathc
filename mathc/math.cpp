@@ -1,7 +1,6 @@
 #include <cassert>
 #include <charconv>
-#include <deque>
-#include <initializer_list>
+#include <cmath>
 #include <optional>
 #include <print>
 #include <memory>
@@ -12,7 +11,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-#include <expected>
 
 using namespace std::string_view_literals;
 
@@ -114,6 +112,9 @@ private:
 
 constexpr std::optional<std::vector<token>> lexer::lex(const std::string_view buffer)
 {
+    if (buffer.size() == 0)
+        return {};
+
     lexer l;
     l.buffer = buffer;
     l.lex();
@@ -164,11 +165,11 @@ constexpr std::optional<token> lexer::parse_operation_token()
     const auto _ = consume();
 
     switch(*current) {
-        case '*': return std::optional<token> {{ .type=token_type::op_mul, .value={ current, current + 1 } }};
-        case '/': return std::optional<token> {{ .type=token_type::op_div, .value={ current, current + 1 } }};
-        case '^': return std::optional<token> {{ .type=token_type::op_exp, .value={ current, current + 1 } }};
-        case '-': return std::optional<token> {{ .type=token_type::op_add, .value={ current, current + 1 } }};
-        case '+': return std::optional<token> {{ .type=token_type::op_add, .value={ current, current + 1 } }};
+        case '*': return std::optional<token> { token{ .type=token_type::op_mul, .value={ current, current + 1 } }};
+        case '/': return std::optional<token> { token{ .type=token_type::op_div, .value={ current, current + 1 } }};
+        case '^': return std::optional<token> { token{ .type=token_type::op_exp, .value={ current, current + 1 } }};
+        case '-': return std::optional<token> { token{ .type=token_type::op_sub, .value={ current, current + 1 } }};
+        case '+': return std::optional<token> { token{ .type=token_type::op_add, .value={ current, current + 1 } }};
     }
 
     throw std::runtime_error(std::format("Operation not recognized: {}", *current));
@@ -247,8 +248,6 @@ using node = std::variant<op_node, constant_node, symbol_node>;
 
 struct op_node
 {
-    op_node(std::unique_ptr<node>&& l, std::unique_ptr<node>&& r, operation_type t);
-    std::string format() const;
     std::unique_ptr<node> left;
     std::unique_ptr<node> right;
     operation_type type;
@@ -256,30 +255,13 @@ struct op_node
 
 struct constant_node
 {
-    constant_node(int c) : value(c) {}
-    std::string format() const { return std::format("constant_node: {}", value); }
     int value;
 };
 
 struct symbol_node
 {
-    template<typename S>
-    symbol_node(const S& str) : value(str) {}
-    std::string format() const { return std::format("symbol_node: {}", value); }
     std::string value;
 };
-
-op_node::op_node(std::unique_ptr<node>&& l, std::unique_ptr<node>&& r, operation_type t)
-    : left(std::move(l)), right(std::move(r)), type(t)
-{}
-
-std::string op_node::format() const
-{
-    return std::format("op_node: \n\t{}\n\t{}\n\t{}",
-                       left->visit(visitor_t{ [](const auto& node){ return node.format(); } }),
-                       operation_type_to_string(type),
-                       right->visit(visitor_t{ [](const auto& node){ return node.format(); } }));
-}
 
 struct parser
 {
@@ -302,26 +284,26 @@ struct parser
     }
     [[nodiscard]] constexpr bool consume(const std::source_location& sl = std::source_location::current())
     {
-        std::println(stderr, "{}: consumed {}", sl.function_name(), tokens[index].value);
+        // std::println(stderr, "{}: consumed {}", sl.function_name(), tokens[index].value);
         return index++ < tokens.size();
     }
 
-    constexpr std::optional<std::unique_ptr<node>> parse();
-    constexpr std::optional<std::unique_ptr<node>> parse_expression();
-    constexpr std::optional<std::unique_ptr<node>> parse_term();
-    constexpr std::optional<std::unique_ptr<node>> parse_factor();
-    constexpr std::optional<std::unique_ptr<node>> parse_var();
+    constexpr std::optional<node> parse();
+    constexpr std::optional<node> parse_expression();
+    constexpr std::optional<node> parse_term();
+    constexpr std::optional<node> parse_factor();
+    constexpr std::optional<node> parse_var();
 
-    constexpr std::optional<std::unique_ptr<node>> parse_constant();
-    constexpr std::optional<std::unique_ptr<node>> parse_symbol();
+    constexpr std::optional<node> parse_constant(bool negate = false);
+    constexpr std::optional<node> parse_symbol();
 
-    constexpr static std::optional<std::unique_ptr<node>> parse(const std::span<const token> tokens);
+    constexpr static std::optional<node> parse(const std::span<const token> tokens);
 
 private:
     parser() = default;
 };
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse()
+constexpr std::optional<node> parser::parse()
 {
     return parse_expression();
 }
@@ -329,11 +311,13 @@ constexpr std::optional<std::unique_ptr<node>> parser::parse()
 // grammar:
 //
 // <expr> ::= <term> '+' <expr> | <term> '-' <expr> | <term>
-// <term> ::= <factor> '*' <term> | <factor> '/' <term> | <factor>
+// <term> ::= [-+]? <factor> '*' <term> | [-+]? <factor> '/' <term> | [-+]? <factor>
 // <factor> ::= <var> ^ <factor> | <var>
 // <var> ::= <constant> | <symbol> | '(' <expr> ')'
+// <constant> ::= [0-9]+
+// <symbol> ::= [A-Za-z]+
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse_expression()
+constexpr std::optional<node> parser::parse_expression()
 {
     auto term = parse_term();
     if (!term.has_value())
@@ -355,18 +339,42 @@ constexpr std::optional<std::unique_ptr<node>> parser::parse_expression()
         return term;
 
     const auto op_type = op_token.type == token_type::op_add ? operation_type::add : operation_type::sub;
-    return std::optional<std::unique_ptr<node>> {
-        std::make_unique<node>(
-            std::in_place_type_t<op_node>{},
-            std::move(term.value()),
-            std::move(expr.value()),
+    return std::optional<node> {
+        op_node {
+            std::make_unique<node>(std::move(term.value())),
+            std::make_unique<node>(std::move(expr.value())),
             op_type
-        )
+        }
     };
 }
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse_term()
+constexpr std::optional<node> parser::parse_term()
 {
+    const auto current_token_or = current();
+    if (!current_token_or.has_value())
+        return {};
+
+    const auto& current_token = current_token_or.value();
+    if (current_token.type == token_type::op_sub) {
+        assert(consume());
+        auto ret = parse_term();
+        if (!ret.has_value())
+            return {};
+
+        return std::optional<node>{
+            op_node {
+                .left = std::make_unique<node>(constant_node{ 0 }),
+                .right = std::make_unique<node>(std::move(ret.value())),
+                .type = operation_type::sub,
+            }
+        };
+    }
+
+    if (current_token.type == token_type::op_add) {
+        assert(consume());
+        return parse_expression();
+    }
+
     auto factor = parse_factor();
     if (!factor.has_value())
         return {};
@@ -387,21 +395,20 @@ constexpr std::optional<std::unique_ptr<node>> parser::parse_term()
         return factor;
 
     const auto op_type = op_token.type == token_type::op_mul ? operation_type::mul : operation_type::div;
-    return std::optional<std::unique_ptr<node>> {
-        std::make_unique<node>(
-            std::in_place_type_t<op_node>{},
-            std::move(factor.value()),
-            std::move(term.value()),
+    return std::optional<node> {
+        op_node{
+            std::make_unique<node>(std::move(factor.value())),
+            std::make_unique<node>(std::move(term.value())),
             op_type
-        )
+        }
     };
 }
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse_factor()
+constexpr std::optional<node> parser::parse_factor()
 {
     auto var = parse_var();
     if (!var.has_value())
-        return {};
+        return var;
 
     const auto op_token_or = current(); 
     if (!op_token_or.has_value())
@@ -417,17 +424,16 @@ constexpr std::optional<std::unique_ptr<node>> parser::parse_factor()
     if (!factor.has_value())
         return var;
 
-    return std::optional<std::unique_ptr<node>> {
-        std::make_unique<node>(
-            std::in_place_type_t<op_node>{},
-            std::move(var.value()),
-            std::move(factor.value()),
+    return std::optional<node> {
+        op_node{
+            std::make_unique<node>(std::move(var.value())),
+            std::make_unique<node>(std::move(factor.value())),
             operation_type::exp
-        )
+        }
     };
 }
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse_var()
+constexpr std::optional<node> parser::parse_var()
 {
     auto constant = parse_constant();
     if (constant.has_value())
@@ -461,7 +467,7 @@ constexpr std::optional<std::unique_ptr<node>> parser::parse_var()
     return expr;
 }
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse_symbol()
+constexpr std::optional<node> parser::parse_symbol()
 {
     const auto& current_token_or = current();
     if (!current_token_or.has_value())
@@ -473,15 +479,10 @@ constexpr std::optional<std::unique_ptr<node>> parser::parse_symbol()
 
     assert(consume());
 
-    return std::optional<std::unique_ptr<node>> {
-        std::make_unique<node>(
-            std::in_place_type_t<symbol_node>{},
-            current_token.value
-        )
-    };
+    return std::optional<node>{ symbol_node{ std::string(current_token.value) } };
 }
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse_constant()
+constexpr std::optional<node> parser::parse_constant(bool negate)
 {
     const auto& current_token_or = current();
     if (!current_token_or.has_value())
@@ -496,41 +497,136 @@ constexpr std::optional<std::unique_ptr<node>> parser::parse_constant()
     assert(res.ec == std::errc{});
     assert(consume());
 
-    return std::optional<std::unique_ptr<node>> {
-        std::make_unique<node>(
-            std::in_place_type_t<constant_node>{},
-            val
-        )
-    };
+    return std::optional<node>{ constant_node{ negate ? -val : val } };
 }
 
-constexpr std::optional<std::unique_ptr<node>> parser::parse(const std::span<const token> tokens)
+constexpr std::optional<node> parser::parse(const std::span<const token> tokens)
 {
+    if (tokens.size() == 0)
+        return {};
+
     parser p;
     p.tokens = tokens;
     return p.parse();
+}
+
+// ---------------------------------------- Interpreter
+
+struct symbol_table
+{
+    struct node_t
+    {
+
+    };
+
+    constexpr auto find(const std::string_view) const { return 0; }
+};
+
+using execution_result = int;
+
+struct interpreter
+{
+    constexpr static execution_result interpret(const node& root_node,
+                                                const symbol_table& symbol_table);
+};
+
+constexpr execution_result interpreter::interpret(const node& root_node,
+                                                  const symbol_table& symbol_table)
+{
+    if(std::holds_alternative<op_node>(root_node)) {
+        const auto& op = std::get<op_node>(root_node);
+        const auto left_result = interpreter::interpret(*op.left, symbol_table);
+        const auto right_result = interpreter::interpret(*op.right, symbol_table);
+        switch(op.type) {
+            case operation_type::mul: return execution_result{ left_result * right_result };
+            case operation_type::div: return execution_result{ left_result / right_result };
+            case operation_type::add: return execution_result{ left_result + right_result };
+            case operation_type::sub: return execution_result{ left_result - right_result };
+            case operation_type::exp: return execution_result{ (int)std::pow(left_result, right_result) };
+        }
+    }
+
+    else if (std::holds_alternative<constant_node>(root_node)) {
+        const auto& op = std::get<constant_node>(root_node);
+        return execution_result{ op.value };
+    }
+
+    else if(std::holds_alternative<symbol_node>(root_node)) {
+        const auto& op = std::get<symbol_node>(root_node);
+        return execution_result{ symbol_table.find(op.value) };
+    }
+
+    std::unreachable();
 }
 
 }
 
 using namespace mathc;
 
+static void print_tree(const node& root_node)
+{
+    if(std::holds_alternative<op_node>(root_node)) {
+        const auto& op = std::get<op_node>(root_node);
+        std::print("o:(");
+
+        if (op.left.get())
+            print_tree(*op.left);
+
+        std::print("{}", operation_type_to_string(op.type));
+
+        if (op.right.get())
+            print_tree(*op.right);
+
+        std::print(")");
+        return;
+    }
+
+    else if (std::holds_alternative<constant_node>(root_node)) {
+        const auto& op = std::get<constant_node>(root_node);
+        std::print("c:{}", op.value);
+        return;
+    }
+
+    else if(std::holds_alternative<symbol_node>(root_node)) {
+        const auto& op = std::get<symbol_node>(root_node);
+        std::print("s:{}", op.value);
+        return;
+    }
+
+    std::unreachable();
+}
+
+constexpr static execution_result test(const std::string_view source)
+{
+    auto tokens = lexer::lex(source).value();
+    auto node = parser::parse(tokens).value();
+    return interpreter::interpret(node, {});
+}
+
+static_assert(test("1+1") == 2);
+static_assert(test("10+10") == 20);
+static_assert(test("10+10-20") == 0);
+static_assert(test("10+10-25") == -5);
+static_assert(test("-25+10") == -15);
+static_assert(test("-(25+10)") == -35);
+static_assert(test("--25+10") == 35);
+
 int main(int, const char* argv[])
 {
-    const auto tokens = mathc::lexer::lex(std::string_view(argv[1]));
+    const auto tokens = lexer::lex(std::string_view{ argv[1] });
     if (!tokens.has_value())
         return 1;
 
     for(const auto& t : tokens.value())
-        std::println("{} {}", mathc::token_type_str(t.type), t.value);
+        std::println("{} {}", token_type_str(t.type), t.value);
 
-    const auto root_node = mathc::parser::parse(std::span{ tokens.value().begin(), tokens.value().end() });
-    if (!root_node.has_value())
+    const auto root_node_or = parser::parse(std::span{ tokens.value().begin(), tokens.value().end() });
+    if (!root_node_or.has_value())
         return 1;
 
-    auto visitor = visitor_t{
-        [](const auto& st){ std::println("{}", st.format()); }
-    };
-    
-    root_node.value()->visit(visitor);
+    const auto& root_node = root_node_or.value();
+    print_tree(root_node);
+    std::puts("");
+
+    std::println("result: {}", interpreter::interpret(root_node, {}));
 }
