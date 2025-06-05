@@ -69,6 +69,7 @@ static_assert(test("2(-2)") == -4);
 static_assert(test("-2(-2)") == 4);
 static_assert(test("1-1+1") == 1);
 static_assert(test("1-2*1+1") == 0);
+static_assert(test("1-(-2)*1+1") == 4);
 static_assert(test("1-(1+1)") == -1);
 static_assert(test("(1-1)+1") == 1);
 #endif
@@ -80,8 +81,9 @@ int main(int argc, const char* argv[])
     #pragma GCC diagnostic ignored "-Wunsafe-buffer-usage"
     const auto tokens = lexer::lex(std::string_view{ argv[1] });
     #pragma GCC diagnostic pop
+
     for(const auto& t : tokens)
-        std::println("{} {}", token_type_str(t.type), t.value);
+        std::println(stderr, "{} {}", token_type_str(t.type), t.value);
 
     const auto root_node_or = parser::parse(std::span{ tokens });
     if (!root_node_or.has_value())

@@ -19,7 +19,7 @@ struct symbol_table
     constexpr auto find(const std::string_view) const { return 0; }
 };
 
-using execution_result = int;
+using execution_result = std::int64_t;
 
 struct interpreter
 {

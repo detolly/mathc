@@ -7,6 +7,9 @@
 
 #pragma once
 
+namespace mathc
+{
+
 using namespace std::string_view_literals;
 
 enum class operation_type
@@ -18,7 +21,7 @@ enum class operation_type
     exp
 };
 
-constexpr auto operation_type_to_string(operation_type t)
+constexpr static inline auto operation_type_to_string(operation_type t)
 {
     switch(t) {
         case operation_type::mul: return "*"sv;
@@ -46,7 +49,7 @@ struct op_node
 
 struct constant_node
 {
-    int value;
+    std::int64_t value;
 };
 
 struct symbol_node
@@ -60,4 +63,6 @@ template<typename T, typename... Args>
 constexpr static inline auto make_parse_result(Args&&... args)
 {
     return std::make_optional<node>(std::in_place_type_t<T>{}, std::forward<Args>(args)...);
+}
+
 }
