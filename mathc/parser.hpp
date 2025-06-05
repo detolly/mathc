@@ -4,7 +4,6 @@
 #include <charconv>
 #include <optional>
 #include <memory>
-#include <source_location>
 #include <utility>
 
 #include <lexer.hpp>
@@ -18,27 +17,21 @@ struct parser
     std::span<const token> tokens{};
     std::size_t index{ 0 };
 
-    [[nodiscard]] constexpr const std::optional<token> current() const
+    [[nodiscard]] constexpr inline const std::optional<token> current() const
     {
         if (index < tokens.size())
             return std::optional{ tokens[index] };
 
         return {};
     }
-    [[nodiscard]] constexpr const std::optional<token> peek() const
+    [[nodiscard]] constexpr inline const std::optional<token> peek() const
     {
         if (index + 1 >= tokens.size())
             return {};
 
         return tokens[index + 1];
     }
-    [[nodiscard]] constexpr bool consume(
-        // const std::source_location& sl = std::source_location::current()
-    )
-    {
-        // std::println(stderr, "{}: consumed {}", sl.function_name(), tokens[index].value);
-        return index++ < tokens.size();
-    }
+    [[nodiscard]] constexpr inline bool consume() { return index++ < tokens.size(); }
 
     constexpr parse_result parse();
     constexpr parse_result parse_expression();
@@ -58,7 +51,7 @@ private:
     parser() = default;
 };
 
-constexpr parse_result parser::parse()
+constexpr inline parse_result parser::parse()
 {
     return parse_expression();
 }
@@ -72,7 +65,7 @@ constexpr parse_result parser::parse()
 // <constant> ::= [0-9]+(\.[0-9]{1,})?
 // <symbol> ::= [A-Za-z]+
 
-constexpr parse_result parser::parse_expression()
+constexpr inline parse_result parser::parse_expression()
 {
     auto term = parse_term();
     if (!term.has_value())
@@ -87,7 +80,7 @@ constexpr parse_result parser::parse_expression()
                                       operation_type::add);
 }
 
-constexpr parse_result parser::parse_term()
+constexpr inline parse_result parser::parse_term()
 {
     auto factor = parse_factor();
     if (!factor.has_value())
@@ -114,7 +107,7 @@ constexpr parse_result parser::parse_term()
                                       op_type);
 }
 
-constexpr parse_result parser::parse_factor()
+constexpr inline parse_result parser::parse_factor()
 {
     auto var = parse_var();
     if (!var.has_value())
@@ -139,9 +132,7 @@ constexpr parse_result parser::parse_factor()
                                       operation_type::exp);
 }
 
-// <var> ::= <constant> '(' <expr> ')' | <symbol> '(' <expr> ')' | <constant> | <symbol> | '(' <expr> ')' 
-
-constexpr parse_result parser::parse_paren_expression()
+constexpr inline parse_result parser::parse_paren_expression()
 {
     const auto paren_open_token_or = current(); 
     if (!paren_open_token_or.has_value())
@@ -167,7 +158,7 @@ constexpr parse_result parser::parse_paren_expression()
     return expr;
 }
 
-constexpr parse_result parser::parse_multiplication_paren_expression(auto&& value)
+constexpr inline parse_result parser::parse_multiplication_paren_expression(auto&& value)
 {
     auto expr = parse_paren_expression();
     if (!expr.has_value())
@@ -178,7 +169,7 @@ constexpr parse_result parser::parse_multiplication_paren_expression(auto&& valu
                                       operation_type::mul);
 }
 
-constexpr parse_result parser::parse_var()
+constexpr inline parse_result parser::parse_var()
 {
     const auto current_token_or = current();
     if (!current_token_or.has_value())
@@ -227,7 +218,7 @@ constexpr parse_result parser::parse_var()
     return parse_paren_expression();
 }
 
-constexpr parse_result parser::parse_symbol()
+constexpr inline parse_result parser::parse_symbol()
 {
     const auto& current_token_or = current();
     if (!current_token_or.has_value())
@@ -242,7 +233,7 @@ constexpr parse_result parser::parse_symbol()
     return make_parse_result<symbol_node>(std::string(current_token.value));
 }
 
-constexpr parse_result parser::parse_constant()
+constexpr inline parse_result parser::parse_constant()
 {
     const auto& current_token_or = current();
     if (!current_token_or.has_value())
@@ -260,7 +251,7 @@ constexpr parse_result parser::parse_constant()
     return make_parse_result<constant_node>(val);
 }
 
-constexpr parse_result parser::parse(const std::span<const token> tokens)
+constexpr inline parse_result parser::parse(const std::span<const token> tokens)
 {
     if (tokens.size() == 0)
         return {};
