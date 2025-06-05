@@ -43,6 +43,7 @@ static void print_tree(const node& root_node)
     std::unreachable();
 }
 
+#ifndef NO_TEST
 consteval static execution_result test(const std::string_view source)
 {
     const auto vec = lexer::lex(source);
@@ -70,6 +71,7 @@ static_assert(test("1-1+1") == 1);
 static_assert(test("1-2*1+1") == 0);
 static_assert(test("1-(1+1)") == -1);
 static_assert(test("(1-1)+1") == 1);
+#endif
 
 int main(int argc, const char* argv[])
 {
