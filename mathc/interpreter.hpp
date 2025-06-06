@@ -16,10 +16,10 @@ struct symbol_table
 
     };
 
-    constexpr auto find(const std::string_view) const { return 0; }
+    constexpr auto find(const std::string_view) const { return number{ std::int64_t(0) }; }
 };
 
-using execution_result = std::int64_t;
+using execution_result = number;
 
 struct interpreter
 {
@@ -35,11 +35,11 @@ constexpr execution_result interpreter::interpret(const node& root_node,
         const auto left_result = interpreter::interpret(*op.left, symbol_table);
         const auto right_result = interpreter::interpret(*op.right, symbol_table);
         switch(op.type) {
-            case operation_type::mul: return execution_result{ left_result * right_result };
-            case operation_type::div: return execution_result{ left_result / right_result };
-            case operation_type::add: return execution_result{ left_result + right_result };
-            case operation_type::sub: return execution_result{ left_result - right_result };
-            case operation_type::exp: return execution_result{ static_cast<int>(std::pow(left_result, right_result)) };
+            case operation_type::mul: return { left_result * right_result };
+            case operation_type::div: return { left_result / right_result };
+            case operation_type::add: return { left_result + right_result };
+            case operation_type::sub: return { left_result - right_result };
+            case operation_type::exp: return { left_result ^ right_result };
         }
 
         std::unreachable();

@@ -12,6 +12,15 @@
 namespace mathc
 {
 
+using parse_result = std::optional<node>;
+
+template<typename T, typename... Args>
+constexpr static inline auto make_parse_result(Args&&... args)
+{
+    return std::make_optional<node>(std::in_place_type_t<T>{}, std::forward<Args>(args)...);
+}
+
+
 struct parser
 {
     std::span<const token> tokens{};
@@ -183,7 +192,8 @@ constexpr inline parse_result parser::parse_var()
         if (!ret.has_value())
             throw std::runtime_error("expected term");
 
-        return make_parse_result<op_node>(std::make_unique<node>(constant_node{ -1 }),
+        return make_parse_result<op_node>(std::make_unique<node>(std::in_place_type_t<constant_node>{},
+                                                                 number::from_int(-1)),
                                           std::make_unique<node>(std::move(ret.value())),
                                           operation_type::mul);
     }
@@ -243,12 +253,13 @@ constexpr inline parse_result parser::parse_constant()
     if (current_token.type != token_type::number_literal)
         return {};
 
-    int val;
-    const auto res = std::from_chars(current_token.value.begin(), current_token.value.end(), val);
-    assert(res.ec == std::errc{});
-    assert(consume());
 
-    return make_parse_result<constant_node>(val);
+    const auto number = number::from_token(current_token);
+    if (!number.has_value())
+       throw std::runtime_error("invalid number"); 
+
+    assert(consume());
+    return make_parse_result<constant_node>(number.value());
 }
 
 constexpr inline parse_result parser::parse(const std::span<const token> tokens)

@@ -1,11 +1,12 @@
+#pragma once
+
 #include <string_view>
 #include <string>
 #include <utility>
 #include <variant>
 #include <memory>
-#include <optional>
 
-#pragma once
+#include <number.hpp>
 
 namespace mathc
 {
@@ -49,20 +50,12 @@ struct op_node
 
 struct constant_node
 {
-    std::int64_t value;
+    number value;
 };
 
 struct symbol_node
 {
     std::string value;
 };
-
-using parse_result = std::optional<node>;
-
-template<typename T, typename... Args>
-constexpr static inline auto make_parse_result(Args&&... args)
-{
-    return std::make_optional<node>(std::in_place_type_t<T>{}, std::forward<Args>(args)...);
-}
 
 }

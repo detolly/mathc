@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cassert>
-#include <format>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -48,6 +48,7 @@ struct token
 {
     token_type type{ token_type::null };
     std::string_view value{};
+    bool has_decimal{ false };
 };
 
 constexpr static bool is_number(const char c)      { return c >= '0' && c <= '9'; }
@@ -66,17 +67,6 @@ struct lexer
     constexpr inline auto& current() const { return buffer[index]; }
 
     [[nodiscard]] constexpr inline bool consume() { index++; return can_consume(); }
-    [[nodiscard]] constexpr inline bool consume_while_number()
-    { 
-        bool has_seen_decimal = false;
-        while(is_number(current()) || (current() == '.' && !has_seen_decimal)) {
-            if (current() == '.')
-                has_seen_decimal = true;
-            if (!consume())
-                return false;
-        }
-        return can_consume();
-    }
 
     [[nodiscard]] constexpr inline bool consume_whitespace() {
         while(is_whitespace(current())) {
@@ -183,9 +173,16 @@ constexpr inline token lexer::parse_alpha_token()
 constexpr inline token lexer::parse_number_literal_token()
 {
     const auto start = current_iterator();
-    const auto _ = consume_while_number();
 
-    return token { token_type::number_literal, { start, current_iterator() } };
+    bool has_seen_decimal = false;
+    while(is_number(current()) || (current() == '.' && !has_seen_decimal)) {
+        if (current() == '.')
+            has_seen_decimal = true;
+        if (!consume())
+            break;
+    }
+
+    return { token_type::number_literal, { start, current_iterator() }, has_seen_decimal };
 }
 
 constexpr inline token lexer::parse_paren_token()
