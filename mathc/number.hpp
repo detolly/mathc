@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cfloat>
 #include <cmath>
 #include <cstdint>
 #include <format>
@@ -26,6 +25,12 @@ struct number
     constexpr static number from_int(std::int64_t num) { return number{ num }; }
     constexpr static number from_double(double num) { return number{ num }; }
     constexpr static std::optional<number> from_token(const token& t);
+
+    constexpr inline bool is_int() const { return std::holds_alternative<std::int64_t>(impl); }
+    constexpr inline bool is_double() const { return std::holds_alternative<double>(impl); }
+
+    constexpr inline auto as_int() const { return std::get<std::int64_t>(impl); }
+    constexpr inline auto as_double() const { return std::get<double>(impl); }
 
     constexpr number operator*(const number& other) const;
     constexpr number operator+(const number& other) const;
@@ -137,19 +142,15 @@ constexpr inline std::optional<number> number::from_token(const token& t)
 
 constexpr inline bool number::operator==(double other) const
 {
-    if (!std::holds_alternative<double>(impl))
+    if (!is_double())
         return false;
 
-    const auto diff = std::abs(std::get<double>(impl) - other);
+    const auto diff = std::abs(as_double() - other);
     return diff < std::numeric_limits<double>::epsilon();
 }
 
+constexpr inline bool number::operator==(std::int64_t other) const { return is_int() && as_int() == other; }
 constexpr inline bool number::operator==(int other) const { return operator==(static_cast<std::int64_t>(other)); }
-
-constexpr inline bool number::operator==(std::int64_t other) const
-{
-    return std::holds_alternative<std::int64_t>(impl) && (std::get<std::int64_t>(impl) == other);
-}
 
 template<typename Callable>
 constexpr static inline number visit_two(Callable&& c, const number& a, const number& b)
