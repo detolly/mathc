@@ -49,7 +49,10 @@ consteval static auto evaluate(const std::string_view source)
     const auto vec = lexer::lex(source);
     assert(vec.size() > 0);
 
-    const auto node_or = parser::parse(vec);
+    const auto node_or_error = parser::parse(vec);
+    assert(node_or_error.has_value());
+
+    const auto& node_or = node_or_error.value();
     assert(node_or.has_value());
 
     const auto& node = node_or.value();
@@ -93,21 +96,27 @@ int main(int argc, const char* argv[])
 {
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wunsafe-buffer-usage"
-
     if (argc < 2) {
         std::println("Usage: {} {{expression}}", argv[0]);
         return 1;
     }
-    const auto tokens = lexer::lex(std::string_view{ argv[1] });
-
+    const auto source = std::string_view{ argv[1] };
     #pragma GCC diagnostic pop
+
+    const auto tokens = lexer::lex(source);
 
     // for(const auto& t : tokens)
     //     std::println(stderr, "{} {}", token_type_str(t.type), t.value);
 
-    const auto root_node_or = parser::parse(std::span{ tokens });
-    if (!root_node_or.has_value())
+    const auto root_node_or_error = parser::parse(std::span{ tokens });
+    if (!root_node_or_error.has_value()) {
+        std::println(stderr, "{}", root_node_or_error.error().str);
         return 1;
+    }
+
+    const auto& root_node_or = root_node_or_error.value();
+    if (!root_node_or.has_value())
+        return 2;
 
     const auto& root_node = root_node_or.value();
     // print_tree(root_node);

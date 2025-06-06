@@ -5,4 +5,5 @@
 -Wno-padded
 -Wno-c++20-compat
 -Wno-switch-default
+-Wno-gnu-statement-expression
 -I.

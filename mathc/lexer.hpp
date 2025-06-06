@@ -140,9 +140,9 @@ constexpr inline static token_type token_type_from_char(char c)
         case '^': return token_type::op_exp;
         case '-': return token_type::op_sub;
         case '+': return token_type::op_add;
-        default:
-            throw std::runtime_error("Unknown operation char");
     }
+
+    std::unreachable();
 }
 
 constexpr inline token lexer::parse_operation_token()
@@ -196,7 +196,7 @@ constexpr inline token lexer::parse_paren_token()
         case ')': return { token_type::paren_close, { current, 1 } };
     }
 
-    throw std::runtime_error("not a paren token");
+    std::unreachable();
 }
 
 }

@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <charconv>
+#include <expected>
 #include <optional>
 #include <memory>
 #include <utility>
@@ -12,12 +13,34 @@
 namespace mathc
 {
 
-using parse_result = std::optional<node>;
+#define TRY(x, expression)                                 \
+        auto x ## _error = (expression);                   \
+        if (!x ## _error.has_value()) [[unlikely]]         \
+            return x ## _error;                            \
+        auto& x = x ## _error .value()                     \
+
+struct parse_error
+{
+    std::string str;
+};
+
+using parse_result = std::expected<std::optional<node>, parse_error>;
 
 template<typename T, typename... Args>
 constexpr static inline auto make_parse_result(Args&&... args)
 {
-    return std::make_optional<node>(std::in_place_type_t<T>{}, std::forward<Args>(args)...);
+    return parse_result{ std::in_place_t{}, std::in_place_t{}, std::in_place_type_t<T>{}, std::forward<Args>(args)... };
+}
+
+constexpr static inline auto make_parse_result()
+{
+    return parse_result{ std::in_place_t{}, std::optional<node>{} };
+}
+
+template<typename... Args>
+constexpr static inline auto make_parse_error(Args&&... args)
+{
+    return parse_result{ std::unexpect_t{}, std::forward<Args>(args)... };
 }
 
 
@@ -52,7 +75,7 @@ struct parser
     constexpr parse_result parse_symbol();
 
     constexpr parse_result parse_paren_expression();
-    constexpr parse_result parse_multiplication_paren_expression(auto&& value);
+    constexpr parse_result parse_multiplication_paren_expression(node&& value);
 
     constexpr static parse_result parse(const std::span<const token> tokens);
 
@@ -67,7 +90,7 @@ constexpr inline parse_result parser::parse()
 
 // grammar:
 //
-// <expr> ::= <term> <expr> | <term>
+// <expr> ::= <term> <expr> | <term> | <end of stream>
 // <term> ::= <factor> '*' <term> | <factor> '/' <term> | <factor>
 // <factor> ::= <var> ^ <factor> | <var>
 // <var> ::= [-+]? (<constant> '(' <expr> ')' | <symbol> '(' <expr> ')' | '(' <expr> ')' | <constant> | <symbol>)
@@ -76,68 +99,77 @@ constexpr inline parse_result parser::parse()
 
 constexpr inline parse_result parser::parse_expression()
 {
-    auto term = parse_term();
-    if (!term.has_value())
-        return {};
+    TRY(term_or, parse_term());
+    if (!term_or.has_value())
+        return term_or_error; 
 
-    auto expr = parse_expression();
-    if (!expr.has_value())
-        return term;
+    auto& term = term_or.value();
+    TRY(expr_or, parse_expression());
+    if (!expr_or.has_value())
+        return term_or_error;
 
-    return make_parse_result<op_node>(std::make_unique<node>(std::move(term.value())),
-                                      std::make_unique<node>(std::move(expr.value())),
+    auto& expr = expr_or.value();
+    return make_parse_result<op_node>(std::make_unique<node>(std::move(term)),
+                                      std::make_unique<node>(std::move(expr)),
                                       operation_type::add);
 }
 
 constexpr inline parse_result parser::parse_term()
 {
-    auto factor = parse_factor();
-    if (!factor.has_value())
-        return {};
+    TRY(factor_or, parse_factor());
+    if (!factor_or.has_value())
+        return factor_or_error;
+
+    auto& factor = factor_or.value();
 
     const auto op_token_or = current(); 
     if (!op_token_or.has_value())
-        return factor;
+        return factor_or_error;
 
     const auto& op_token = op_token_or.value();
     if (op_token.type != token_type::op_mul &&
         op_token.type != token_type::op_div)
-        return factor;
+        return factor_or_error;
 
     assert(consume());
 
-    auto term = parse_term();
-    if (!term.has_value())
-        throw std::runtime_error("Expected term");
+    TRY(term_or, parse_term());
+    if (!term_or.has_value())
+        return make_parse_error("Expected term.");
+
+    auto& term = term_or.value();
 
     const auto op_type = op_token.type == token_type::op_mul ? operation_type::mul : operation_type::div;
-    return make_parse_result<op_node>(std::make_unique<node>(std::move(factor.value())),
-                                      std::make_unique<node>(std::move(term.value())),
+    return make_parse_result<op_node>(std::make_unique<node>(std::move(factor)),
+                                      std::make_unique<node>(std::move(term)),
                                       op_type);
 }
 
 constexpr inline parse_result parser::parse_factor()
 {
-    auto var = parse_var();
-    if (!var.has_value())
-        return var;
+    TRY(var_or, parse_var());
+    if (!var_or.has_value())
+        return var_or_error;
+
+    auto& var = var_or.value();
 
     const auto op_token_or = current(); 
     if (!op_token_or.has_value())
-        return var;
+        return var_or_error;
 
     const auto& op_token = op_token_or.value();
     if (op_token.type != token_type::op_exp)
-        return var;
+        return var_or_error;
 
     assert(consume());
 
-    auto factor = parse_factor();
-    if (!factor.has_value())
-        return var;
+    TRY(factor_or, parse_factor());
+    if (!factor_or.has_value())
+        return make_parse_error("Expected factor.");
 
-    return make_parse_result<op_node>(std::make_unique<node>(std::move(var.value())),
-                                      std::make_unique<node>(std::move(factor.value())),
+    auto& factor = factor_or.value();
+    return make_parse_result<op_node>(std::make_unique<node>(std::move(var)),
+                                      std::make_unique<node>(std::move(factor)),
                                       operation_type::exp);
 }
 
@@ -145,36 +177,40 @@ constexpr inline parse_result parser::parse_paren_expression()
 {
     const auto paren_open_token_or = current(); 
     if (!paren_open_token_or.has_value())
-        return {};
+        return make_parse_result();
 
     const auto& paren_open_token = paren_open_token_or.value();
     if (paren_open_token.type != token_type::paren_open)
-        return {};
+        return make_parse_result();
 
     assert(consume());
-    auto expr = parse_expression();
+
+    TRY(expr_or, parse_expression());
+    if (!expr_or.has_value())
+        return make_parse_error("Expected expression");
 
     const auto paren_close_token_or = current(); 
     if (!paren_close_token_or.has_value())
-        throw std::runtime_error("unexpected end of stream, expected )");
+        return make_parse_error("Unexpected end of stream, expected )");
 
     const auto& paren_close_token = paren_close_token_or.value();
     if (paren_close_token.type != token_type::paren_close)
-        throw std::runtime_error("expected )");
+        return make_parse_error(std::format("Expected ), got {}", paren_close_token.value));
 
     assert(consume());
 
-    return expr;
+    return expr_or_error;
 }
 
-constexpr inline parse_result parser::parse_multiplication_paren_expression(auto&& value)
+constexpr inline parse_result parser::parse_multiplication_paren_expression(node&& value)
 {
-    auto expr = parse_paren_expression();
-    if (!expr.has_value())
-        return {};
+    TRY(expr_or, parse_paren_expression());
+    if (!expr_or.has_value())
+        return make_parse_result();
 
-    return make_parse_result<op_node>(std::make_unique<node>(std::move(value.value())),
-                                      std::make_unique<node>(std::move(expr.value())),
+    auto& expr = expr_or.value();
+    return make_parse_result<op_node>(std::make_unique<node>(std::move(value)),
+                                      std::make_unique<node>(std::move(expr)),
                                       operation_type::mul);
 }
 
@@ -182,47 +218,51 @@ constexpr inline parse_result parser::parse_var()
 {
     const auto current_token_or = current();
     if (!current_token_or.has_value())
-        return {};
+        return make_parse_result();
 
     const auto& current_token = current_token_or.value();
     if (current_token.type == token_type::op_sub) {
         assert(consume());
 
-        auto ret = parse_var();
-        if (!ret.has_value())
-            throw std::runtime_error("expected term");
+        TRY(var_or, parse_var());
+        if (!var_or.has_value())
+            return make_parse_error("Expected var, got nothing.");
 
+        auto& var = var_or.value();
         return make_parse_result<op_node>(std::make_unique<node>(std::in_place_type_t<constant_node>{},
                                                                  number::from_int(-1)),
-                                          std::make_unique<node>(std::move(ret.value())),
+                                          std::make_unique<node>(std::move(var)),
                                           operation_type::mul);
     }
 
     if (current_token.type == token_type::op_add) {
         assert(consume());
-        auto term = parse_var();
-        if (!term.has_value())
-            throw std::runtime_error("expected term");
 
-        return term;
+        TRY(var_or, parse_var());
+        if (!var_or.has_value())
+            return make_parse_error("Expected term.");
+
+        return var_or_error;
     }
 
-    auto constant = parse_constant();
-    if (constant.has_value()) {
-        auto paren_multiplication = parse_multiplication_paren_expression(std::move(constant));
-        if (!paren_multiplication.has_value())
-            return constant;
+    TRY(constant_or, parse_constant());
+    if (constant_or.has_value()) {
+        auto& constant = constant_or.value();
+        TRY(paren_multiplication_or, parse_multiplication_paren_expression(std::move(constant)));
+        if (!paren_multiplication_or.has_value())
+            return constant_or_error;
 
-        return paren_multiplication;
+        return paren_multiplication_or_error;
     }
 
-    auto symbol = parse_symbol();
-    if (symbol.has_value()) {
-        auto paren_multiplication = parse_multiplication_paren_expression(std::move(constant));
-        if (!paren_multiplication.has_value())
-            return symbol;
+    TRY(symbol_or, parse_symbol());
+    if (symbol_or.has_value()) {
+        auto& symbol = symbol_or.value();
+        TRY(paren_multiplication_or, parse_multiplication_paren_expression(std::move(symbol)));
+        if (!paren_multiplication_or.has_value())
+            return symbol_or_error;
 
-        return paren_multiplication;
+        return paren_multiplication_or_error;
     }
 
     return parse_paren_expression();
@@ -232,14 +272,13 @@ constexpr inline parse_result parser::parse_symbol()
 {
     const auto& current_token_or = current();
     if (!current_token_or.has_value())
-        return {};
+        return make_parse_result();
 
     const auto& current_token = current_token_or.value();
     if (current_token.type != token_type::alpha)
-        return {};
+        return make_parse_result();
 
     assert(consume());
-
     return make_parse_result<symbol_node>(std::string(current_token.value));
 }
 
@@ -247,19 +286,19 @@ constexpr inline parse_result parser::parse_constant()
 {
     const auto& current_token_or = current();
     if (!current_token_or.has_value())
-        return {};
+        return make_parse_result();
 
     const auto& current_token = current_token_or.value();
     if (current_token.type != token_type::number_literal)
-        return {};
+        return make_parse_result();
 
 
-    const auto number = number::from_token(current_token);
+    auto number = number::from_token(current_token);
     if (!number.has_value())
-       throw std::runtime_error("invalid number"); 
+        return make_parse_error(std::format("Invalid number: {}", current_token.value));
 
     assert(consume());
-    return make_parse_result<constant_node>(number.value());
+    return make_parse_result<constant_node>(std::move(number.value()));
 }
 
 constexpr inline parse_result parser::parse(const std::span<const token> tokens)
