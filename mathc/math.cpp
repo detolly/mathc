@@ -14,7 +14,7 @@ using namespace mathc;
 {
     if(std::holds_alternative<op_node>(root_node)) {
         const auto& op = std::get<op_node>(root_node);
-        std::print("o:(");
+        std::print("(");
 
         if (op.left.get())
             print_tree(*op.left);
@@ -30,13 +30,24 @@ using namespace mathc;
 
     else if (std::holds_alternative<constant_node>(root_node)) {
         const auto& op = std::get<constant_node>(root_node);
-        std::print("c:{}", op.value);
+        std::print("{}", op.value);
         return;
     }
 
     else if(std::holds_alternative<symbol_node>(root_node)) {
         const auto& op = std::get<symbol_node>(root_node);
-        std::print("s:{}", op.value);
+        std::print("{}", op.value);
+        return;
+    }
+
+    else if(std::holds_alternative<function_call_node>(root_node)) {
+        const auto& op = std::get<function_call_node>(root_node);
+        std::print("{}(", op.function_name);
+        for(const auto& argument : op.arguments) {
+            print_tree(argument);
+            std::print(", ");
+        }
+        std::print(")");
         return;
     }
 
@@ -90,10 +101,12 @@ static_assert(test_equals("2^2", 4));
 static_assert(test_equals("2^3", 8));
 static_assert(test_equals("2^(-2)", 1.0/4.0));
 static_assert(test_equals("2^(-8)", 1.0/256.0));
+static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
 #endif
 
 int main(int argc, const char* argv[])
 {
+
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wunsafe-buffer-usage"
     if (argc < 2) {
@@ -110,7 +123,8 @@ int main(int argc, const char* argv[])
 
     const auto root_node_or_error = parser::parse(std::span{ tokens });
     if (!root_node_or_error.has_value()) {
-        std::println(stderr, "{}", root_node_or_error.error().str);
+        const auto& error = root_node_or_error.error();
+        std::println(stderr, "{}", error.string);
         return 1;
     }
 
@@ -119,8 +133,8 @@ int main(int argc, const char* argv[])
         return 2;
 
     const auto& root_node = root_node_or.value();
-    // print_tree(root_node);
-    // std::puts("");
+    print_tree(root_node);
+    std::puts("");
 
     std::println("{}", interpreter::interpret(root_node, {}));
 }

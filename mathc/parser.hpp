@@ -1,13 +1,13 @@
 #pragma once
 
 #include <cassert>
-#include <charconv>
 #include <expected>
 #include <optional>
 #include <memory>
 #include <utility>
 
 #include <lexer.hpp>
+#include <functions.hpp>
 #include <node.hpp>
 
 namespace mathc
@@ -21,7 +21,8 @@ namespace mathc
 
 struct parse_error
 {
-    std::string str;
+    token token;
+    std::string string;
 };
 
 using parse_result = std::expected<std::optional<node>, parse_error>;
@@ -37,22 +38,24 @@ constexpr static inline auto make_parse_result()
     return parse_result{ std::in_place_t{}, std::optional<node>{} };
 }
 
-template<typename... Args>
-constexpr static inline auto make_parse_error(Args&&... args)
-{
-    return parse_result{ std::unexpect_t{}, std::forward<Args>(args)... };
-}
-
-
 struct parser
 {
     std::span<const token> tokens{};
     std::size_t index{ 0 };
 
+    template<typename... Args>
+    constexpr inline auto make_parse_error(Args&&... args)
+    {
+        if (current().has_value())
+            return parse_result{ std::unexpect_t{}, current().value(), std::forward<Args>(args)... };
+
+        return parse_result{ std::unexpect_t{}, *tokens.rbegin(), std::forward<Args>(args)... };
+    }
+
     [[nodiscard]] constexpr inline const std::optional<token> current() const
     {
         if (index < tokens.size())
-            return std::optional{ tokens[index] };
+            return std::make_optional(tokens[index]);
 
         return {};
     }
@@ -61,7 +64,7 @@ struct parser
         if (index + 1 >= tokens.size())
             return {};
 
-        return tokens[index + 1];
+        return std::make_optional(tokens[index + 1]);
     }
     [[nodiscard]] constexpr inline bool consume() { return index++ < tokens.size(); }
 
@@ -73,6 +76,7 @@ struct parser
 
     constexpr parse_result parse_constant();
     constexpr parse_result parse_symbol();
+    constexpr parse_result parse_function_call(const std::string_view function_name);
 
     constexpr parse_result parse_paren_expression();
     constexpr parse_result parse_multiplication_paren_expression(node&& value);
@@ -93,7 +97,8 @@ constexpr inline parse_result parser::parse()
 // <expr> ::= <term> <expr> | <term> | <end of stream>
 // <term> ::= <factor> '*' <term> | <factor> '/' <term> | <factor>
 // <factor> ::= <var> ^ <factor> | <var>
-// <var> ::= [-+]? (<constant> '(' <expr> ')' | <symbol> '(' <expr> ')' | '(' <expr> ')' | <constant> | <symbol>)
+// <var> ::= [-+]? (<constant> '(' <expr> ')' | <symbol> | <symbol_function_call> | '(' <expr> ')' | <constant> | <symbol>)
+// <function_call> ::= <symbol> '(' ( <expr> (,)? ){0,} ')' 
 // <constant> ::= [0-9]+(\.[0-9]{1,})?
 // <symbol> ::= [A-Za-z]+
 
@@ -258,6 +263,16 @@ constexpr inline parse_result parser::parse_var()
     TRY(symbol_or, parse_symbol());
     if (symbol_or.has_value()) {
         auto& symbol = symbol_or.value();
+        auto& node = std::get<symbol_node>(symbol);
+        for(const auto& func : functions) {
+            if (node.value == func) {
+                TRY(function_call_or, parse_function_call(node.value));
+                if (function_call_or.has_value())
+                    return function_call_or_error;
+                break;
+            }
+        }
+
         TRY(paren_multiplication_or, parse_multiplication_paren_expression(std::move(symbol)));
         if (!paren_multiplication_or.has_value())
             return symbol_or_error;
@@ -268,9 +283,56 @@ constexpr inline parse_result parser::parse_var()
     return parse_paren_expression();
 }
 
+constexpr inline parse_result parser::parse_function_call(const std::string_view function_name)
+{
+    const auto current_token_or = current();
+    if (!current_token_or.has_value())
+        return make_parse_result();
+
+    const auto& current_token = current_token_or.value();
+    if (current_token.type != token_type::paren_open)
+        return make_parse_result();
+
+    assert(consume());
+    function_call_node node{ std::string{ function_name }, {} };
+
+    while(true) {
+        TRY(expr_or, parse_expression());
+        if (!expr_or.has_value()) {
+            const auto stop_token_or = current();
+            if (!stop_token_or.has_value())
+                return make_parse_error("Unexpected end of stream. Missing ).");
+
+            const auto& stop_token = stop_token_or.value();
+            if (stop_token.type != token_type::paren_close)
+                return make_parse_error("Expected end of function, got junk.");
+
+            assert(consume());
+            break;
+        }
+
+        node.arguments.emplace_back(std::move(expr_or.value()));
+
+        const auto comma_token_or = current();
+        if (!comma_token_or.has_value())
+            return make_parse_error("Unexpected end of stream. Missing ).");
+
+        const auto& comma_token = comma_token_or.value();
+        if (comma_token.type == token_type::comma)
+            assert(consume());
+        else if (comma_token.type == token_type::paren_close) {
+            assert(consume());
+            break;
+        } else
+            return make_parse_error("Junk encountered while parsing function arguments.");
+    }
+
+    return make_parse_result<function_call_node>(std::move(node));
+}
+
 constexpr inline parse_result parser::parse_symbol()
 {
-    const auto& current_token_or = current();
+    const auto current_token_or = current();
     if (!current_token_or.has_value())
         return make_parse_result();
 
@@ -279,12 +341,13 @@ constexpr inline parse_result parser::parse_symbol()
         return make_parse_result();
 
     assert(consume());
-    return make_parse_result<symbol_node>(std::string(current_token.value));
+
+    return make_parse_result<symbol_node>(std::string{ current_token.value });
 }
 
 constexpr inline parse_result parser::parse_constant()
 {
-    const auto& current_token_or = current();
+    const auto current_token_or = current();
     if (!current_token_or.has_value())
         return make_parse_result();
 
@@ -292,19 +355,19 @@ constexpr inline parse_result parser::parse_constant()
     if (current_token.type != token_type::number_literal)
         return make_parse_result();
 
-
     auto number = number::from_token(current_token);
     if (!number.has_value())
         return make_parse_error(std::format("Invalid number: {}", current_token.value));
 
     assert(consume());
+
     return make_parse_result<constant_node>(std::move(number.value()));
 }
 
 constexpr inline parse_result parser::parse(const std::span<const token> tokens)
 {
     if (tokens.size() == 0)
-        return {};
+        return make_parse_result();
 
     parser p;
     p.tokens = tokens;

@@ -55,6 +55,12 @@ constexpr execution_result interpreter::interpret(const node& root_node,
         return execution_result{ symbol_table.find(op.value) };
     }
 
+    else if(std::holds_alternative<function_call_node>(root_node)) {
+        const auto& op = std::get<function_call_node>(root_node);
+        (void)op;
+        return execution_result{ 0.0 };
+    }
+
     std::unreachable();
 }
 

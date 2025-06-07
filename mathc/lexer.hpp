@@ -23,7 +23,8 @@ enum class token_type
     number_literal,
     alpha,
     paren_open,
-    paren_close
+    paren_close,
+    comma
 };
 
 constexpr std::string_view token_type_str(const token_type t)
@@ -39,6 +40,7 @@ constexpr std::string_view token_type_str(const token_type t)
         case token_type::paren_open:        return "paren_open"sv;
         case token_type::paren_close:       return "paren_close"sv;
         case token_type::alpha:             return "alpha"sv;
+        case token_type::comma:             return "comma"sv;
     }
 
     std::unreachable();
@@ -49,12 +51,14 @@ struct token
     token_type type{ token_type::null };
     std::string_view value{};
     bool has_decimal{ false };
+    std::size_t index_in_stream{ 0 };
 };
 
 constexpr static bool is_number(const char c)      { return c >= '0' && c <= '9'; }
 constexpr static bool is_whitespace(const char c)  { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; }
 constexpr static bool is_operation(const char c)   { return c == '*' || c == '/' || c == '+' || c == '-' || c == '^'; }
 constexpr static bool is_paren(const char c)       { return c == '(' || c == ')'; }
+constexpr static bool is_comma(const char c)       { return c == ','; }
 
 struct lexer
 {
@@ -81,6 +85,7 @@ struct lexer
     constexpr token parse_operation_token();
     constexpr token parse_alpha_token();
     constexpr token parse_paren_token();
+    constexpr token parse_comma_token();
 
     constexpr void lex();
 
@@ -129,6 +134,7 @@ constexpr inline token lexer::parse_token()
     if (is_number(current_char))            return parse_number_literal_token();
     else if (is_operation(current_char))    return parse_operation_token();
     else if (is_paren(current_char))        return parse_paren_token();
+    else if (is_comma(current_char))        return parse_comma_token();
     else                                    return parse_alpha_token();
 }
 
@@ -150,24 +156,24 @@ constexpr inline token lexer::parse_operation_token()
     const auto current = current_iterator();
     const auto _ = consume();
 
-    return { token_type_from_char(*current), { current, 1 } };
+    return { token_type_from_char(*current), { current, 1 }, false, index };
 }
 
 constexpr inline token lexer::parse_alpha_token()
 {
     const auto start = current_iterator();
     if (!consume())
-        return { token_type::alpha, { start, current_iterator() } };
+        return { token_type::alpha, { start, current_iterator() }, false, index };
 
     do {
         const auto current_char = current();
         if (is_whitespace(current_char) ||
             is_paren(current_char) ||
             is_operation(current_char))
-            return { token_type::alpha, { start, current_iterator() } };
+            return { token_type::alpha, { start, current_iterator() }, false, index };
     } while(consume());
 
-    return { token_type::alpha, { start, current_iterator() } };
+    return { token_type::alpha, { start, current_iterator() }, false, index };
 }
 
 constexpr inline token lexer::parse_number_literal_token()
@@ -182,7 +188,7 @@ constexpr inline token lexer::parse_number_literal_token()
             break;
     }
 
-    return { token_type::number_literal, { start, current_iterator() }, has_seen_decimal };
+    return { token_type::number_literal, { start, current_iterator() }, has_seen_decimal, index };
 }
 
 constexpr inline token lexer::parse_paren_token()
@@ -192,8 +198,21 @@ constexpr inline token lexer::parse_paren_token()
     const auto _ = consume();
 
     switch(current_token) {
-        case '(': return { token_type::paren_open, { current, 1 } };
-        case ')': return { token_type::paren_close, { current, 1 } };
+        case '(': return { token_type::paren_open, { current, 1 }, false, index };
+        case ')': return { token_type::paren_close, { current, 1 }, false, index };
+    }
+
+    std::unreachable();
+}
+
+constexpr inline token lexer::parse_comma_token()
+{
+    const auto current_token = current();
+    const auto current = current_iterator();
+    const auto _ = consume();
+
+    switch(current_token) {
+        case ',': return { token_type::comma, { current, 1 }, false, index };
     }
 
     std::unreachable();

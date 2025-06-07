@@ -22,9 +22,9 @@ enum class operation_type
     exp
 };
 
-constexpr static inline auto operation_type_to_string(operation_type t)
+constexpr static inline auto operation_type_to_string(operation_type type)
 {
-    switch(t) {
+    switch(type) {
         case operation_type::mul: return "*"sv;
         case operation_type::div: return "/"sv;
         case operation_type::add: return "+"sv;
@@ -38,8 +38,9 @@ constexpr static inline auto operation_type_to_string(operation_type t)
 struct op_node;
 struct constant_node;
 struct symbol_node;
+struct function_call_node;
 
-using node = std::variant<op_node, constant_node, symbol_node>;
+using node = std::variant<op_node, constant_node, symbol_node, function_call_node>;
 
 struct op_node
 {
@@ -56,6 +57,12 @@ struct constant_node
 struct symbol_node
 {
     std::string value;
+};
+
+struct function_call_node
+{
+    std::string function_name;
+    std::vector<node> arguments;
 };
 
 }

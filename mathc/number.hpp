@@ -55,6 +55,7 @@ constexpr static inline number pow(const double base, const double exp)
 
     if (base == 0.0 && exp <= 0.0)
         return number{ 0.0 };
+
     if (exp == 0.0)
         return number{ 1.0 };
 
@@ -152,11 +153,12 @@ constexpr inline bool number::operator==(double other) const
 constexpr inline bool number::operator==(std::int64_t other) const { return is_int() && as_int() == other; }
 constexpr inline bool number::operator==(int other) const { return operator==(static_cast<std::int64_t>(other)); }
 
-template<typename Callable>
+template<bool promote_to_double = false, typename Callable>
 constexpr static inline number visit_two(Callable&& c, const number& a, const number& b)
 {
     const auto op = [&c](const auto a_val, const auto b_val) {
-        if constexpr(std::is_same_v<std::int64_t, std::remove_cvref_t<decltype(a_val)>> &&
+        if constexpr(!promote_to_double &&
+                     std::is_same_v<std::int64_t, std::remove_cvref_t<decltype(a_val)>> &&
                      std::is_same_v<std::int64_t, std::remove_cvref_t<decltype(b_val)>>)
             return number{ c(static_cast<std::int64_t>(a_val),
                                static_cast<std::int64_t>(b_val)) };
@@ -189,7 +191,7 @@ constexpr inline number number::operator-(const number& other) const
 
 constexpr inline number number::operator/(const number& other) const
 {
-    return visit_two([](const auto a, const auto b){ return a / b; }, *this, other);
+    return visit_two<true>([](const auto a, const auto b) { return a / b; }, *this, other);
 }
 
 constexpr inline number number::operator^(const number& exponent) const
