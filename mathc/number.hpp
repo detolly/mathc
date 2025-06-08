@@ -11,12 +11,6 @@
 namespace mathc
 {
 
-// template<class... Ts>
-// struct visitor_t : Ts...
-// {
-//     using Ts::operator()...;
-// };
-
 struct number
 {
     constexpr explicit number(std::int64_t i) : impl(i) {}
@@ -161,17 +155,15 @@ constexpr static inline number visit_two(Callable&& c, const number& a, const nu
                      std::is_same_v<std::int64_t, std::remove_cvref_t<decltype(a_val)>> &&
                      std::is_same_v<std::int64_t, std::remove_cvref_t<decltype(b_val)>>)
             return number{ c(static_cast<std::int64_t>(a_val),
-                               static_cast<std::int64_t>(b_val)) };
+                             static_cast<std::int64_t>(b_val)) };
         else
             return number{ c(static_cast<double>(a_val),
-                               static_cast<double>(b_val)) };
+                             static_cast<double>(b_val)) };
     };
 
-    return std::visit([&](const auto a_val) {
-        return std::visit([&](const auto b_val){
-            return op(a_val, b_val);
-        }, b.impl);
-    }, a.impl);
+    return std::visit([&](const auto& a_val, const auto& b_val) {
+        return op(a_val, b_val);
+    }, a.impl, b.impl);
 }
 
 constexpr inline number number::operator*(const number& other) const

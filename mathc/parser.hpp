@@ -1,41 +1,38 @@
 #pragma once
 
 #include <cassert>
-#include <expected>
 #include <optional>
 #include <memory>
 #include <utility>
 
-#include <lexer.hpp>
+#include <common.hpp>
 #include <functions.hpp>
 #include <node.hpp>
+#include <token.hpp>
 
 namespace mathc
 {
 
-#define TRY(x, expression)                                 \
-        auto x ## _error = (expression);                   \
-        if (!x ## _error.has_value()) [[unlikely]]         \
-            return x ## _error;                            \
-        auto& x = x ## _error .value()                     \
-
 struct parse_error
 {
     token token;
-    std::string string;
+    std::string error;
 };
 
 using parse_result = std::expected<std::optional<node>, parse_error>;
 
 template<typename T, typename... Args>
-constexpr static inline auto make_parse_result(Args&&... args)
+constexpr static inline parse_result make_parse_result(Args&&... args)
 {
-    return parse_result{ std::in_place_t{}, std::in_place_t{}, std::in_place_type_t<T>{}, std::forward<Args>(args)... };
+    return parse_result{ std::in_place_t{},
+                         std::in_place_t{},
+                         std::in_place_type_t<T>{},
+                         std::forward<Args>(args)... };
 }
 
 constexpr static inline auto make_parse_result()
 {
-    return parse_result{ std::in_place_t{}, std::optional<node>{} };
+    return parse_result{ std::in_place_t{} };
 }
 
 struct parser
@@ -86,6 +83,8 @@ struct parser
 private:
     parser() = default;
 };
+
+// Implementation
 
 constexpr inline parse_result parser::parse()
 {
@@ -264,13 +263,12 @@ constexpr inline parse_result parser::parse_var()
     if (symbol_or.has_value()) {
         auto& symbol = symbol_or.value();
         auto& node = std::get<symbol_node>(symbol);
-        for(const auto& func : functions) {
-            if (node.value == func) {
-                TRY(function_call_or, parse_function_call(node.value));
-                if (function_call_or.has_value())
-                    return function_call_or_error;
-                break;
-            }
+
+        const auto* function = find_function(node.value);
+        if (function != nullptr) {
+            TRY(function_call_or, parse_function_call(node.value));
+            if (function_call_or.has_value())
+                return function_call_or_error;
         }
 
         TRY(paren_multiplication_or, parse_multiplication_paren_expression(std::move(symbol)));

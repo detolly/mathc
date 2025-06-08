@@ -43,9 +43,11 @@ using namespace mathc;
     else if(std::holds_alternative<function_call_node>(root_node)) {
         const auto& op = std::get<function_call_node>(root_node);
         std::print("{}(", op.function_name);
-        for(const auto& argument : op.arguments) {
+        for(auto i = 0u; i < op.arguments.size(); i++) {
+            const auto& argument = op.arguments[i];
             print_tree(argument);
-            std::print(", ");
+            if (i != op.arguments.size() - 1)
+                std::print(", ");
         }
         std::print(")");
         return;
@@ -67,15 +69,13 @@ consteval static auto evaluate(const std::string_view source)
     assert(node_or.has_value());
 
     const auto& node = node_or.value();
-    return interpreter::interpret(node, {});
+    auto vm = mathc::vm{};
+
+    return interpreter::simplify(node, vm);
 }
 
 consteval static bool test_equals(const std::string_view source, auto v) {
-    const auto result = evaluate(source);
-    if (result != v)
-        assert(false && "asd");
-
-    return true;
+    return std::get<number>(evaluate(source).value()) == v;
 }
 
 static_assert(test_equals("1+1", 2));
@@ -124,7 +124,7 @@ int main(int argc, const char* argv[])
     const auto root_node_or_error = parser::parse(std::span{ tokens });
     if (!root_node_or_error.has_value()) {
         const auto& error = root_node_or_error.error();
-        std::println(stderr, "{}", error.string);
+        std::println(stderr, "{}", error.error);
         return 1;
     }
 
@@ -136,5 +136,20 @@ int main(int argc, const char* argv[])
     print_tree(root_node);
     std::puts("");
 
-    std::println("{}", interpreter::interpret(root_node, {}));
+    auto vm = mathc::vm{};
+    const auto result_or_error = interpreter::simplify(root_node, vm);
+    if (!result_or_error.has_value()) {
+        std::println("{}", result_or_error.error().error);
+        return 1;
+    }
+
+    const auto& result = result_or_error.value();
+    if (std::holds_alternative<node>(result)) {
+        print_tree(std::get<node>(result));
+        std::puts("");
+        return 0;
+    }
+
+    std::println("{}", std::get<number>(result));
+    return 0;
 }

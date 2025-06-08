@@ -1,67 +1,111 @@
 #pragma once
 
-#include <cmath>
-#include <string_view>
+#include <utility>
 #include <variant>
 
-#include <parser.hpp>
+#include <common.hpp>
+#include <functions.hpp>
+#include <node.hpp>
+#include <number.hpp>
+#include <vm.hpp>
 
 namespace mathc
 {
 
-struct symbol_table
-{
-    struct node_t
-    {
-
-    };
-
-    constexpr auto find(const std::string_view) const { return number{ std::int64_t(0) }; }
-};
-
-using execution_result = number;
-
 struct interpreter
 {
-    constexpr static execution_result interpret(const node& root_node,
-                                                const symbol_table& symbol_table);
+    constexpr static execution_result run(const node& root_node, vm& vm);
+    constexpr static execution_result simplify(const node& root_node, vm& vm);
 };
 
-constexpr execution_result interpreter::interpret(const node& root_node,
-                                                  const symbol_table& symbol_table)
+// Implementation
+
+constexpr inline execution_result interpreter::simplify(const node& root_node, vm& vm)
 {
-    if(std::holds_alternative<op_node>(root_node)) {
-        const auto& op = std::get<op_node>(root_node);
-        const auto left_result = interpreter::interpret(*op.left, symbol_table);
-        const auto right_result = interpreter::interpret(*op.right, symbol_table);
-        switch(op.type) {
-            case operation_type::mul: return { left_result * right_result };
-            case operation_type::div: return { left_result / right_result };
-            case operation_type::add: return { left_result + right_result };
-            case operation_type::sub: return { left_result - right_result };
-            case operation_type::exp: return { left_result ^ right_result };
+    const struct
+    {
+        const node& root_node;
+        struct vm& vm;
+
+        constexpr auto operator()(const op_node& op) const
+        {
+            TRY(left_result, interpreter::simplify(*op.left, vm));
+            TRY(right_result, interpreter::simplify(*op.right, vm));
+
+            constexpr static struct {
+                constexpr static auto operator()(node&& n)
+                {
+                    return std::make_unique<node>(std::forward<node>(n));
+                }
+                constexpr static auto operator()(number&& n)
+                {
+                    return std::make_unique<node>(std::in_place_type_t<constant_node>{}, n);
+                }
+            } creator{};
+
+            if (std::holds_alternative<node>(left_result) ||
+                std::holds_alternative<node>(right_result)) {
+                return make_execution_result<op_node>(std::visit(creator, std::move(left_result)),
+                                                      std::visit(creator, std::move(right_result)),
+                                                      op.type);
+            }
+
+            const auto& left_result_number = std::get<number>(left_result);
+            const auto& right_result_number = std::get<number>(right_result);
+
+            switch(op.type) {
+                case operation_type::mul: return make_execution_result<number>(left_result_number * right_result_number);
+                case operation_type::div: return make_execution_result<number>(left_result_number / right_result_number);
+                case operation_type::add: return make_execution_result<number>(left_result_number + right_result_number);
+                case operation_type::sub: return make_execution_result<number>(left_result_number - right_result_number);
+                case operation_type::exp: return make_execution_result<number>(left_result_number ^ right_result_number);
+            }
+
+            std::unreachable();
         }
 
-        std::unreachable();
-    }
+        constexpr auto operator()(const constant_node& c) const
+        {
+            return execution_result{ c.value };
+        }
 
-    else if (std::holds_alternative<constant_node>(root_node)) {
-        const auto& op = std::get<constant_node>(root_node);
-        return execution_result{ op.value };
-    }
+        constexpr auto operator()(const symbol_node& symbol) const
+        {
+            auto symbol_node = vm.symbol_node(symbol.value);
+            if (symbol_node.has_value())
+                return simplify(symbol_node.value(), vm);
 
-    else if(std::holds_alternative<symbol_node>(root_node)) {
-        const auto& op = std::get<symbol_node>(root_node);
-        return execution_result{ symbol_table.find(op.value) };
-    }
+            return make_execution_result<node>(copy_node(root_node));
+        }
 
-    else if(std::holds_alternative<function_call_node>(root_node)) {
-        const auto& op = std::get<function_call_node>(root_node);
-        (void)op;
-        return execution_result{ 0.0 };
-    }
+        constexpr auto operator()(const function_call_node& function_call) const
+        {
+            const auto function = find_function(function_call.function_name);
+            if (!function)
+                return make_execution_error(std::format("Function {} not found.", function_call.function_name));
 
-    std::unreachable();
+            std::vector<number> results{};
+            results.reserve(function_call.arguments.size());
+
+            bool all_simplified = false;
+            for(const auto& argument : function_call.arguments) {
+                TRY(simplified, simplify(argument, vm));
+                if (!std::holds_alternative<number>(simplified)) {
+                    all_simplified = false;
+                    break;
+                }
+                results.emplace_back(std::get<number>(simplified));
+            }
+
+            if (all_simplified)
+                return function->func(results);
+
+            // FIX
+            return make_execution_result<number>(0.0);
+        }
+    } simplify_visitor{ root_node, vm };
+
+    return std::visit(simplify_visitor, root_node);
 }
 
 }
