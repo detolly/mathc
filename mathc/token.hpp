@@ -23,6 +23,27 @@ enum class token_type
     comma
 };
 
+constexpr static bool token_type_is_operation(const token_type t)
+{
+    switch(t) {
+        case token_type::op_mul:
+        case token_type::op_div:
+        case token_type::op_add:
+        case token_type::op_sub:
+        case token_type::op_exp:
+            return true;
+        case token_type::null:
+        case token_type::number_literal:
+        case token_type::alpha:
+        case token_type::paren_open:
+        case token_type::paren_close:
+        case token_type::comma:
+            return false;
+    }
+
+    std::unreachable();
+}
+
 constexpr std::string_view token_type_str(const token_type t)
 {
     switch(t) {

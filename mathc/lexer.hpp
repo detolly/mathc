@@ -129,7 +129,8 @@ constexpr inline token lexer::parse_alpha_token()
         const auto current_char = current();
         if (is_whitespace(current_char) ||
             is_paren(current_char) ||
-            is_operation(current_char))
+            is_operation(current_char) ||
+            is_comma(current_char))
             return { token_type::alpha, { start, current_iterator() }, false, index };
     } while(consume());
 

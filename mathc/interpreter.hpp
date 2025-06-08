@@ -87,21 +87,28 @@ constexpr inline execution_result interpreter::simplify(const node& root_node, v
             std::vector<number> results{};
             results.reserve(function_call.arguments.size());
 
-            bool all_simplified = true;
-            for(const auto& argument : function_call.arguments) {
+            for(auto i = 0u; i < function_call.arguments.size(); i++) {
+                const auto& argument = function_call.arguments[i];
                 TRY(simplified, simplify(argument, vm));
-                if (!std::holds_alternative<number>(simplified)) {
-                    all_simplified = false;
+                if (!std::holds_alternative<number>(simplified))
                     break;
-                }
+
                 results.emplace_back(std::get<number>(simplified));
             }
 
-            if (all_simplified)
+            if (results.size() == function_call.arguments.size())
                 return function->func(results);
 
-            // FIX
-            return make_execution_result<number>(0.0);
+            std::vector<node> new_arguments{};
+            new_arguments.reserve(function_call.arguments.size());
+            for(auto i = 0u; i < function_call.arguments.size(); i++) {
+                if (i < results.size())
+                    new_arguments.emplace_back(make_node<constant_node>( results[i] ));
+                else
+                    new_arguments.emplace_back(copy_node(function_call.arguments[i]));
+            }
+
+            return make_execution_result<function_call_node>(function_call.function_name, std::move(new_arguments));
         }
     } simplify_visitor{ root_node, vm };
 

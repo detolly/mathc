@@ -253,10 +253,23 @@ constexpr inline parse_result parser::parse_var()
     if (constant_or.has_value()) {
         auto& constant = constant_or.value();
         TRY(paren_multiplication_or, parse_multiplication_paren_expression(std::move(constant)));
-        if (!paren_multiplication_or.has_value())
+        if (paren_multiplication_or.has_value())
+            return paren_multiplication_or_error;
+
+        const auto op_token_or = current();
+        if (!op_token_or.has_value())
             return constant_or_error;
 
-        return paren_multiplication_or_error;
+        const auto& op_token = op_token_or.value();
+        if (token_type_is_operation(op_token.type))
+            return constant_or_error;
+
+        TRY(factor_or, parse_factor());
+        if (factor_or.has_value())
+            return make_parse_result<op_node>(std::make_unique<node>(std::move(constant_or.value())),
+                                              std::make_unique<node>(std::move(factor_or.value())),
+                                              operation_type::mul);
+        return constant_or_error;
     }
 
     TRY(symbol_or, parse_symbol());
