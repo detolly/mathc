@@ -1,7 +1,8 @@
 #pragma once
 
-#include <utility>
 #include <string_view>
+#include <string>
+#include <utility>
 
 namespace mathc
 {
@@ -66,7 +67,7 @@ constexpr std::string_view token_type_str(const token_type t)
 struct token
 {
     token_type type{ token_type::null };
-    std::string_view value{};
+    std::string value;
     bool has_decimal{ false };
     std::size_t index_in_stream{ 0 };
 };

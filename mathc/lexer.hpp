@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -48,9 +47,7 @@ struct lexer
 
     constexpr void lex();
 
-    constexpr static std::vector<token> lex(const std::string& buffer);
     constexpr static std::vector<token> lex(std::string_view buffer);
-
 private:
     lexer() = default;
 };
@@ -62,14 +59,6 @@ constexpr inline std::vector<token> lexer::lex(const std::string_view buffer)
 
     lexer l;
     l.buffer = auto{ buffer };
-    l.lex();
-    return l.tokens;
-}
-
-constexpr inline std::vector<token> lexer::lex(const std::string& buffer)
-{
-    lexer l;
-    l.buffer = std::string_view{ buffer };
     l.lex();
     return l.tokens;
 }

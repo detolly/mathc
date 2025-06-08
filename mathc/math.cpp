@@ -10,46 +10,46 @@
 
 using namespace mathc;
 
-[[maybe_unused]] static void print_tree(const node& root_node)
+static void print_tree(const node& root_node)
 {
     if(std::holds_alternative<op_node>(root_node)) {
         const auto& op = std::get<op_node>(root_node);
-        std::print("(");
+        std::print(stderr, "(");
 
         if (op.left.get())
             print_tree(*op.left);
 
-        std::print("{}", operation_type_to_string(op.type));
+        std::print(stderr, "{}", operation_type_to_string(op.type));
 
         if (op.right.get())
             print_tree(*op.right);
 
-        std::print(")");
+        std::print(stderr, ")");
         return;
     }
 
     else if (std::holds_alternative<constant_node>(root_node)) {
         const auto& op = std::get<constant_node>(root_node);
-        std::print("{}", op.value);
+        std::print(stderr, "{}", op.value);
         return;
     }
 
     else if(std::holds_alternative<symbol_node>(root_node)) {
         const auto& op = std::get<symbol_node>(root_node);
-        std::print("{}", op.value);
+        std::print(stderr, "{}", op.value);
         return;
     }
 
     else if(std::holds_alternative<function_call_node>(root_node)) {
         const auto& op = std::get<function_call_node>(root_node);
-        std::print("{}(", op.function_name);
+        std::print(stderr, "{}(", op.function_name);
         for(auto i = 0u; i < op.arguments.size(); i++) {
             const auto& argument = op.arguments[i];
             print_tree(argument);
             if (i != op.arguments.size() - 1)
-                std::print(", ");
+                std::print(stderr, ", ");
         }
-        std::print(")");
+        std::print(stderr, ")");
         return;
     }
 
@@ -106,7 +106,6 @@ static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
 
 int main(int argc, const char* argv[])
 {
-
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wunsafe-buffer-usage"
     if (argc < 2) {
@@ -117,7 +116,6 @@ int main(int argc, const char* argv[])
     #pragma GCC diagnostic pop
 
     const auto tokens = lexer::lex(source);
-
     // for(const auto& t : tokens)
     //     std::println(stderr, "{} {}", token_type_str(t.type), t.value);
 

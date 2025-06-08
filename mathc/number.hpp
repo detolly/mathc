@@ -119,13 +119,14 @@ constexpr static inline std::optional<number> parse_double(const std::string_vie
 
 constexpr inline std::optional<number> number::from_token(const token& t)
 {
+    const auto value = std::string_view{ t.value };
     if (t.has_decimal) {
         if consteval {
             return parse_double(t.value);
         }
 
         double val;
-        const auto res = std::from_chars(t.value.begin(), t.value.end(), val);
+        const auto res = std::from_chars(value.begin(), value.end(), val);
         if (res.ec != std::errc{})
             return {};
 
@@ -133,7 +134,7 @@ constexpr inline std::optional<number> number::from_token(const token& t)
     }
 
     std::int64_t val;
-    const auto res = std::from_chars(t.value.begin(), t.value.end(), val);
+    const auto res = std::from_chars(value.begin(), value.cend(), val);
     if (res.ec != std::errc{})
         return {};
 
