@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>

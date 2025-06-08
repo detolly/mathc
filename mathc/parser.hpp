@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cassert>
-#include <optional>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include <common.hpp>

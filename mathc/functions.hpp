@@ -2,8 +2,8 @@
 
 #include <span>
 
-#include <number.hpp>
 #include <common.hpp>
+#include <number.hpp>
 
 namespace mathc
 {

@@ -1,10 +1,10 @@
 #pragma once
 
-#include <string_view>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
-#include <memory>
 
 #include <number.hpp>
 
@@ -70,7 +70,7 @@ concept node_type = []<typename... Ts>(std::variant<Ts...>) {
     return (std::same_as<T, Ts> || ...);
 }(node{});
 
-template<typename T, typename... Args>
+template<node_type T, typename... Args>
 constexpr static inline node make_node(Args&&... args)
 {
     return node{ std::in_place_type_t<T>{}, std::forward<Args>(args)... };
@@ -81,8 +81,10 @@ constexpr static inline std::vector<node> copy_arguments(const function_call_nod
 {
     std::vector<node> arguments;
     arguments.reserve(op.arguments.size());
+
     for(const auto& argument_node : op.arguments)
         arguments.emplace_back(copy_node(argument_node));
+
     return arguments;
 }
 
@@ -99,14 +101,8 @@ constexpr static struct
         return make_node<function_call_node>(op.function_name,
                                              copy_arguments(op));
     }
-    constexpr static auto operator()(const symbol_node& op)
-    {
-        return make_node<symbol_node>(op);
-    }
-    constexpr static auto operator()(const constant_node& op)
-    {
-        return make_node<constant_node>(op);
-    }
+    constexpr static auto operator()(const symbol_node& op) { return make_node<symbol_node>(op); }
+    constexpr static auto operator()(const constant_node& op) { return make_node<constant_node>(op); }
 } copy_visitor{};
 
 constexpr static inline node copy_node(const auto& n)

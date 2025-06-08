@@ -2,11 +2,10 @@
 
 #include <expected>
 #include <string>
-#include <optional>
 
+#include <node.hpp>
 #include <number.hpp>
 #include <token.hpp>
-#include <node.hpp>
 
 namespace mathc
 {
