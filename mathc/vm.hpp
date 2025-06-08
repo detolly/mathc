@@ -11,11 +11,25 @@ namespace mathc
 
 struct vm
 {
-    constexpr std::optional<void> insert_symbol(const std::string_view symbol, node&& node);
-    constexpr std::optional<node> symbol_node(const std::string_view) const
+    constexpr void insert_symbol(const std::string_view symbol, const node& node)
     {
+        for(auto& [name, n] : symbols) {
+            if (symbol == name) {
+                n = copy_node(node);
+                return;
+            }
+        }
+
+        symbols.emplace_back(symbol, copy_node(node));
+    }
+
+    constexpr std::optional<node> symbol_node(const std::string_view symbol) const
+    {
+        for(auto& [name, n] : symbols)
+            if (name == symbol)
+                return std::make_optional<node>(copy_node(n));
+
         return {};
-        // return std::make_optional<node>(std::in_place_type_t<constant_node>{}, number{ 0.0 });
     }
 
     std::vector<std::pair<std::string, node>> symbols{};
