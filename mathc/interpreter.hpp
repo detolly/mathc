@@ -87,7 +87,7 @@ constexpr inline execution_result interpreter::simplify(const node& root_node, v
             std::vector<number> results{};
             results.reserve(function_call.arguments.size());
 
-            bool all_simplified = false;
+            bool all_simplified = true;
             for(const auto& argument : function_call.arguments) {
                 TRY(simplified, simplify(argument, vm));
                 if (!std::holds_alternative<number>(simplified)) {

@@ -26,6 +26,11 @@ struct number
     constexpr inline auto as_int() const { return std::get<std::int64_t>(impl); }
     constexpr inline auto as_double() const { return std::get<double>(impl); }
 
+    constexpr inline auto promote_to_double() const
+    {
+        return std::visit([](const auto num){ return static_cast<double>(num); }, impl);
+    }
+
     constexpr number operator*(const number& other) const;
     constexpr number operator+(const number& other) const;
     constexpr number operator-(const number& other) const;
