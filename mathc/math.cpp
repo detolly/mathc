@@ -102,6 +102,7 @@ static_assert(test_equals("2^3", 8));
 static_assert(test_equals("2^(-2)", 1.0/4.0));
 static_assert(test_equals("2^(-8)", 1.0/256.0));
 static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
+static_assert(test_equals("100/5/5", 4.0));
 #endif
 
 int main(int argc, const char* argv[])
