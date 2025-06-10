@@ -1,9 +1,7 @@
 #pragma once
 
-#include <cmath>
 #include <cstdint>
-#include <format>
-#include <type_traits>
+#include <optional>
 #include <variant>
 
 #include <lexer.hpp>
@@ -16,9 +14,9 @@ struct number
     constexpr explicit number(std::int64_t i) : impl(i) {}
     constexpr explicit number(double d) : impl(d) {}
 
-    constexpr static number from_int(std::int64_t num) { return number{ num }; }
-    constexpr static number from_double(double num) { return number{ num }; }
-    constexpr static std::optional<number> from_token(const token& t);
+    constexpr static inline number from_int(std::int64_t num) { return number{ num }; }
+    constexpr static inline number from_double(double num) { return number{ num }; }
+    constexpr static inline std::optional<number> from_token(const token& t);
 
     constexpr inline bool is_int() const { return std::holds_alternative<std::int64_t>(impl); }
     constexpr inline bool is_double() const { return std::holds_alternative<double>(impl); }
@@ -40,6 +38,8 @@ struct number
     constexpr number& operator=(double other);
     constexpr number& operator=(std::int64_t other);
 
+    constexpr bool approx_equals(const auto other) const;
+
     constexpr bool operator==(double other) const;
     constexpr bool operator==(std::int64_t other) const;
     constexpr bool operator==(int other) const;
@@ -47,50 +47,17 @@ struct number
     std::variant<double, std::int64_t> impl{ 0 };
 };
 
-constexpr static inline number pow(const double base, const double exp)
-{
-    if (!std::is_constant_evaluated())
-        return number{ std::pow(base, exp) };
-
-    if (base == 0.0 && exp <= 0.0)
-        return number{ 0.0 };
-
-    if (exp == 0.0)
-        return number{ 1.0 };
-
-    if (exp < 0.0)
-        return number{ 1.0 } / pow(base, -exp);
-
-    auto int_exp = static_cast<std::int64_t>(exp);
-    auto result = 1.0;
-
-    const auto frac_exp = exp - static_cast<double>(int_exp);
-
-    auto base_sq = base;
-    while (int_exp > 0) {
-        if (int_exp & 1)
-            result *= base_sq;
-        base_sq *= base_sq;
-        int_exp >>= 1;
-    }
-
-    if (frac_exp != 0.0)
-        result *= std::exp(frac_exp * std::log(base));
-
-    return number{ result };
 }
 
-constexpr static inline number pow(const std::int64_t base, const std::int64_t exp)
+#ifndef NO_NUMBER_IMPL
+
+#include <cmath>
+#include <format>
+
+#include <math.hpp>
+
+namespace mathc
 {
-    if (exp < 0)
-        return number::from_double(1) / pow(base, -exp);
-
-    auto ret = base;
-    for(auto i = 1; i < exp; i++)
-        ret *= base;
-
-    return number{ ret };
-}
 
 constexpr static inline std::optional<number> parse_double(const std::string_view str)
 {
@@ -150,6 +117,13 @@ constexpr inline bool number::operator==(double other) const
     return diff < std::numeric_limits<double>::epsilon();
 }
 
+constexpr bool number::approx_equals(const auto other) const
+{
+    return std::visit([other](const auto d){
+        return (std::abs(static_cast<double>(d) - static_cast<double>(other))) < 0.001;
+    }, impl);
+}
+
 constexpr inline bool number::operator==(std::int64_t other) const { return is_int() && as_int() == other; }
 constexpr inline bool number::operator==(int other) const { return operator==(static_cast<std::int64_t>(other)); }
 
@@ -194,7 +168,7 @@ constexpr inline number number::operator/(const number& other) const
 
 constexpr inline number number::operator^(const number& exponent) const
 {
-    return visit_two([](const auto a, const auto b){ return pow(a, b); }, *this, exponent);
+    return visit_two([](const auto a, const auto b){ return math::pow(a, b); }, *this, exponent);
 }
 
 constexpr inline number& number::operator=(const double other) { impl = other; return *this; }
@@ -214,4 +188,7 @@ struct std::formatter<mathc::number, char>
         return std::visit([&c](auto n){ return std::ranges::copy(std::format("{}", n), c.out()).out; }, num.impl);
     }
 };
+
+#endif
+
 

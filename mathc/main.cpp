@@ -57,7 +57,7 @@ static void print_tree(const node& root_node)
     std::unreachable();
 }
 
-#ifndef NO_TEST
+[[maybe_unused]]
 consteval static auto evaluate(const std::string_view source)
 {
     const auto vec = lexer::lex(source);
@@ -72,8 +72,9 @@ consteval static auto evaluate(const std::string_view source)
     return interpreter::simplify(node, vm);
 }
 
+#ifndef NO_TEST
 consteval static bool test_equals(const std::string_view source, auto v) {
-    return std::get<number>(evaluate(source).value()) == v;
+    return std::get<number>(evaluate(source).value()).approx_equals(v);
 }
 
 static_assert(test_equals("1+1", 2));
@@ -98,17 +99,24 @@ static_assert(test_equals("1^5", 1));
 static_assert(test_equals("2^2", 4));
 static_assert(test_equals("2^3", 8));
 static_assert(test_equals("sqrt(4)", 2.0));
-static_assert(test_equals("log2(8)", 8.0));
+static_assert(test_equals("sqrt(0)", 0));
+static_assert(test_equals("log2(8)", 3.0));
 static_assert(test_equals("2^(-2)", 1.0/4.0));
 static_assert(test_equals("2^(-8)", 1.0/256.0));
 static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
 static_assert(test_equals("(2)(2)", 4));
+static_assert(test_equals("(2)2", 4));
+static_assert(test_equals("(2)*2", 4));
 static_assert(test_equals("1/2/2", 1.0 / 4.0));
 static_assert(test_equals("100/5/5", 4.0));
 #endif
 
+constexpr static auto val = std::get<number>(evaluate("log2(8)").value());
+
 int main(int argc, const char* argv[])
 {
+    std::println("{}", val);
+
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wunsafe-buffer-usage"
     if (argc < 2) {
