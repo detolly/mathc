@@ -106,6 +106,7 @@ static_assert(test_equals("2^(-8)", 1.0/256.0));
 static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
 static_assert(test_equals("(2)(2)", 4));
 static_assert(test_equals("(2)2", 4));
+static_assert(test_equals("2(2)", 4));
 static_assert(test_equals("(2)*2", 4));
 static_assert(test_equals("1/2/2", 1.0 / 4.0));
 static_assert(test_equals("100/5/5", 4.0));

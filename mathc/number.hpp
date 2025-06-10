@@ -38,7 +38,7 @@ struct number
     constexpr number& operator=(double other);
     constexpr number& operator=(std::int64_t other);
 
-    constexpr bool approx_equals(const auto other) const;
+    constexpr bool approx_equals(const auto other, const double acceptable_difference = 0.000001) const;
 
     constexpr bool operator==(double other) const;
     constexpr bool operator==(std::int64_t other) const;
@@ -117,10 +117,10 @@ constexpr inline bool number::operator==(double other) const
     return diff < std::numeric_limits<double>::epsilon();
 }
 
-constexpr bool number::approx_equals(const auto other) const
+constexpr bool number::approx_equals(const auto other, const double acceptable_difference) const
 {
-    return std::visit([other](const auto d){
-        return (std::abs(static_cast<double>(d) - static_cast<double>(other))) < 0.001;
+    return std::visit([other, acceptable_difference](const auto d){
+        return (std::abs(static_cast<double>(d) - static_cast<double>(other))) < acceptable_difference;
     }, impl);
 }
 

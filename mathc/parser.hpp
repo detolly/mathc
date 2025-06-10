@@ -80,7 +80,6 @@ struct [[nodiscard]]  parser
     constexpr parse_result parse_function_call(const std::string_view function_name);
 
     constexpr parse_result parse_paren_expression();
-    constexpr parse_result parse_var_multiplication_token(node&& value);
 
     constexpr static parse_result parse(const std::span<const token> tokens);
 
@@ -117,9 +116,11 @@ constexpr inline parse_result parser::parse()
 // <symbol> is builtin
 //
 // <expr> = ['+'|'-'] <term> { ('+'|'-') <term> }
-// <term> = <factor> { ('*'|'/') <factor> }
+// <term> = <factor> { ('*'|'/') <factor> } [<implicit_multiplication>]
+// <implicit_multiplication> = [<number> | <paren_expression> | <symbol>]:<factor>
 // <factor> = <var> { ^ <var> }
-// <var> = <constant> [{ '(' <expr> ')' } | <symbol> ] | <symbol> [<function_call>] | '(' <expr> ')'
+// <var> = <constant> | <symbol> [<function_call>] | <paren_expression>
+// <paren_expression> = '(' <expr> ')'
 // <function_call> = '(' <expr> { ',' <expr> } ')' 
 
 constexpr inline parse_result parser::parse_expression()
@@ -167,6 +168,19 @@ constexpr inline parse_result parser::parse_term()
                                     (type == token_type::op_mul ? operation_type::mul : operation_type::div));
     }
 
+    while(true) {
+        const auto [implicit_multiplication_found, _] = current_token_is<token_type::number_literal,
+                                                    token_type::paren_open,
+                                                    token_type::alpha>();
+        if (!implicit_multiplication_found)
+            break;
+
+        PROPAGATE_ERROR(factor2, parse_factor());
+        factor = make_node<op_node>(std::make_unique<node>(std::move(factor)),
+                                    std::make_unique<node>(std::move(factor2)),
+                                    operation_type::mul);
+    }
+
     return factor_result;
 }
 
@@ -203,28 +217,10 @@ constexpr inline parse_result parser::parse_paren_expression()
     return expr_result;
 }
 
-constexpr inline parse_result parser::parse_var_multiplication_token(node&& value)
-{
-    PROPAGATE_ERROR(factor, parse_factor());
-    factor = make_node<op_node>(std::make_unique<node>(std::move(value)),
-                                std::make_unique<node>(std::move(factor)),
-                                operation_type::mul);
-
-    return factor_result;
-}
-
 constexpr inline parse_result parser::parse_var()
 {
     if (const auto [constant_found, _] = current_token_is<token_type::number_literal>(); constant_found) {
         PROPAGATE_ERROR(constant, parse_constant());
-
-        if (const auto [mul_found, _] =
-            current_token_is<token_type::paren_open,
-                             token_type::alpha>(); mul_found) {
-            PROPAGATE_ERROR(multiplication, parse_var_multiplication_token(std::move(constant)));
-            return multiplication_result;
-        }
-
         return constant_result;
     }
 
@@ -237,26 +233,11 @@ constexpr inline parse_result parser::parse_var()
             return function_call_result;
         }
 
-        if (const auto [mul_found, _] =
-            current_token_is<token_type::paren_open,
-                             token_type::alpha>(); mul_found) {
-            PROPAGATE_ERROR(multiplication, parse_var_multiplication_token(std::move(symbol)));
-            return multiplication_result;
-        }
-
         return symbol_result;
     }
 
     if (const auto [paren_found, _] = current_token_is<token_type::paren_open>(); paren_found) {
         PROPAGATE_ERROR(expr, parse_paren_expression());
-
-        if (const auto [mul_found, _] =
-            current_token_is<token_type::paren_open,
-                             token_type::alpha>(); mul_found) {
-            PROPAGATE_ERROR(multiplication, parse_var_multiplication_token(std::move(expr)));
-            return multiplication_result;
-        }
-
         return expr_result;
     }
 
