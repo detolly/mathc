@@ -120,7 +120,7 @@ constexpr inline parse_result parser::parse()
 // <term> = <factor> { ('*'|'/') <factor> }
 // <factor> = <var> { ^ <var> }
 // <var> = <constant> [{ '(' <expr> ')' } | <symbol> ] | <symbol> [<function_call>] | '(' <expr> ')'
-// <function_call> = '(' <expr> { (,) <expr> } ')' 
+// <function_call> = '(' <expr> { ',' <expr> } ')' 
 
 constexpr inline parse_result parser::parse_expression()
 {
@@ -161,10 +161,10 @@ constexpr inline parse_result parser::parse_term()
             break;
 
         assert(consume());
-        PROPAGATE_ERROR(factor2, parse_term());
+        PROPAGATE_ERROR(factor2, parse_factor());
         factor = make_node<op_node>(std::make_unique<node>(std::move(factor)),
-                                  std::make_unique<node>(std::move(factor2)),
-                                  (type == token_type::op_mul ? operation_type::mul : operation_type::div));
+                                    std::make_unique<node>(std::move(factor2)),
+                                    (type == token_type::op_mul ? operation_type::mul : operation_type::div));
     }
 
     return factor_result;
@@ -182,8 +182,8 @@ constexpr inline parse_result parser::parse_factor()
         assert(consume());
         PROPAGATE_ERROR(var2, parse_var());
         var = make_node<op_node>(std::make_unique<node>(std::move(var)),
-                                  std::make_unique<node>(std::move(var2)),
-                                  operation_type::exp);
+                                 std::make_unique<node>(std::move(var2)),
+                                 operation_type::exp);
     }
 
     return var_result;

@@ -98,6 +98,7 @@ static_assert(test_equals("1^5", 1));
 static_assert(test_equals("2^2", 4));
 static_assert(test_equals("2^3", 8));
 static_assert(test_equals("sqrt(4)", 2.0));
+static_assert(test_equals("log2(8)", 8.0));
 static_assert(test_equals("2^(-2)", 1.0/4.0));
 static_assert(test_equals("2^(-8)", 1.0/256.0));
 static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
