@@ -111,12 +111,8 @@ static_assert(test_equals("1/2/2", 1.0 / 4.0));
 static_assert(test_equals("100/5/5", 4.0));
 #endif
 
-constexpr static auto val = std::get<number>(evaluate("log2(8)").value());
-
 int main(int argc, const char* argv[])
 {
-    std::println("{}", val);
-
     #pragma GCC diagnostic push
     #pragma GCC diagnostic ignored "-Wunsafe-buffer-usage"
     if (argc < 2) {
