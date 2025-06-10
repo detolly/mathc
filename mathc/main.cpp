@@ -73,7 +73,8 @@ consteval static auto evaluate(const std::string_view source)
 }
 
 #ifndef NO_TEST
-consteval static bool test_equals(const std::string_view source, auto v) {
+consteval static bool test_equals(const std::string_view source, auto v)
+{
     return std::get<number>(evaluate(source).value()).approx_equals(v);
 }
 
