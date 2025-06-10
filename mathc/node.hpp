@@ -76,6 +76,12 @@ constexpr static inline node make_node(Args&&... args)
     return node{ std::in_place_type_t<T>{}, std::forward<Args>(args)... };
 }
 
+template<node_type T, typename... Args>
+constexpr static inline std::unique_ptr<node> make_unique_node(Args&&... args)
+{
+    return std::make_unique<node>(std::in_place_type_t<T>{}, std::forward<Args>(args)...);
+}
+
 constexpr static inline node copy_node(const auto& n);
 constexpr static inline std::vector<node> copy_arguments(const function_call_node& op)
 {

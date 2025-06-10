@@ -13,11 +13,11 @@ namespace mathc
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-macros"
 
-#define TRY(x, expression)                                 \
-        auto x ## _error = (expression);                   \
-        if (!x ## _error.has_value()) [[unlikely]]         \
-            return x ## _error;                            \
-        auto& x = x ## _error .value()                     \
+#define PROPAGATE_ERROR(x, expression)                      \
+        auto&& x ## _result = (expression);                 \
+        if (!x ## _result.has_value()) [[unlikely]]         \
+            return x ## _result;                            \
+        [[maybe_unused]] auto&& x = x ## _result .value()   \
 
 #pragma GCC diagnostic pop
 

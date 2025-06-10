@@ -29,8 +29,8 @@ constexpr inline execution_result interpreter::simplify(const node& root_node, v
 
         constexpr auto operator()(const op_node& op) const
         {
-            TRY(left_result, interpreter::simplify(*op.left, vm));
-            TRY(right_result, interpreter::simplify(*op.right, vm));
+            PROPAGATE_ERROR(left_result, interpreter::simplify(*op.left, vm));
+            PROPAGATE_ERROR(right_result, interpreter::simplify(*op.right, vm));
 
             constexpr static struct {
                 constexpr static auto operator()(node&& n)
@@ -89,7 +89,7 @@ constexpr inline execution_result interpreter::simplify(const node& root_node, v
 
             for(auto i = 0u; i < function_call.arguments.size(); i++) {
                 const auto& argument = function_call.arguments[i];
-                TRY(simplified, simplify(argument, vm));
+                PROPAGATE_ERROR(simplified, simplify(argument, vm));
                 if (!std::holds_alternative<number>(simplified))
                     break;
 

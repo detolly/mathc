@@ -62,13 +62,10 @@ consteval static auto evaluate(const std::string_view source)
     const auto vec = lexer::lex(source);
     assert(vec.size() > 0);
 
-    const auto node_or_error = parser::parse(vec);
-    assert(node_or_error.has_value());
+    const auto node_result = parser::parse(vec);
+    assert(node_result.has_value());
 
-    const auto& node_or = node_or_error.value();
-    assert(node_or.has_value());
-
-    const auto& node = node_or.value();
+    const auto& node = node_result.value();
     auto vm = mathc::vm{};
 
     return interpreter::simplify(node, vm);
@@ -84,7 +81,7 @@ static_assert(test_equals("10+10-20", 0));
 static_assert(test_equals("10+10-25", -5));
 static_assert(test_equals("-25+10", -15));
 static_assert(test_equals("-(25+10)", -35));
-static_assert(test_equals("--25+10", 35));
+static_assert(test_equals("-(-25+10)", 15));
 static_assert(test_equals("-(25-10)", -15));
 static_assert(test_equals("-2(2)", -4));
 static_assert(test_equals("2(-2)", -4));
@@ -102,6 +99,7 @@ static_assert(test_equals("2^3", 8));
 static_assert(test_equals("2^(-2)", 1.0/4.0));
 static_assert(test_equals("2^(-8)", 1.0/256.0));
 static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
+static_assert(test_equals("1/2/2", 1.0 / 4.0));
 static_assert(test_equals("100/5/5", 4.0));
 #endif
 
@@ -120,18 +118,14 @@ int main(int argc, const char* argv[])
     // for(const auto& t : tokens)
     //     std::println(stderr, "{} {}", token_type_str(t.type), t.value);
 
-    const auto root_node_or_error = parser::parse(std::span{ tokens });
-    if (!root_node_or_error.has_value()) {
-        const auto& error = root_node_or_error.error();
+    const auto root_node_result = parser::parse(std::span{ tokens });
+    if (!root_node_result.has_value()) {
+        const auto& error = root_node_result.error();
         std::println(stderr, "{}", error.error);
         return 1;
     }
 
-    const auto& root_node_or = root_node_or_error.value();
-    if (!root_node_or.has_value())
-        return 2;
-
-    const auto& root_node = root_node_or.value();
+    const auto& root_node = root_node_result.value();
     print_tree(root_node);
     std::puts("");
 
