@@ -139,8 +139,7 @@ constexpr inline parse_result parser::parse_expression()
 
     while(true) {
         const auto [found, type] = current_token_is<token_type::op_add, token_type::op_sub>();
-        if (!found)
-            break;
+        if (!found) break;
 
         assert(consume());
         PROPAGATE_ERROR(term2, parse_term());
@@ -157,9 +156,9 @@ constexpr inline parse_result parser::parse_term()
     PROPAGATE_ERROR(factor, parse_factor());
 
     while(true) {
-        const auto [found, type] = current_token_is<token_type::op_mul, token_type::op_div>();
-        if (!found)
-            break;
+        const auto [found, type] = current_token_is<token_type::op_mul,
+                                                    token_type::op_div>();
+        if (!found) break;
 
         assert(consume());
         PROPAGATE_ERROR(factor2, parse_factor());
@@ -170,10 +169,9 @@ constexpr inline parse_result parser::parse_term()
 
     while(true) {
         const auto [implicit_multiplication_found, _] = current_token_is<token_type::number_literal,
-                                                    token_type::paren_open,
-                                                    token_type::alpha>();
-        if (!implicit_multiplication_found)
-            break;
+                                                                         token_type::paren_open,
+                                                                         token_type::alpha>();
+        if (!implicit_multiplication_found) break;
 
         PROPAGATE_ERROR(factor2, parse_factor());
         factor = make_node<op_node>(std::make_unique<node>(std::move(factor)),
@@ -190,8 +188,7 @@ constexpr inline parse_result parser::parse_factor()
 
     while (true) {
         const auto [found, _] = current_token_is<token_type::op_exp>();
-        if (!found)
-            break;
+        if (!found) break;
 
         assert(consume());
         PROPAGATE_ERROR(var2, parse_var());
@@ -296,7 +293,6 @@ constexpr inline parse_result parser::parse_constant()
         return make_parse_error(std::format("Invalid number: {}", current().value().get().value));
 
     assert(consume());
-
     return make_parse_result_node<constant_node>(std::move(number.value()));
 }
 
