@@ -119,7 +119,7 @@ constexpr inline parse_result parser::parse()
 // <expr> = ['+'|'-'] <term> { ('+'|'-') <term> }
 // <term> = <factor> { ('*'|'/') <factor> }
 // <factor> = <var> { ^ <var> }
-// <var> = <constant> [{ '(' <expr> ')' } | <symbol> ] | <function_call> | '(' <expr> ')'
+// <var> = <constant> [{ '(' <expr> ')' } | <symbol> ] | <symbol> [<function_call>] | '(' <expr> ')'
 // <function_call> = '(' <expr> { (,) <expr> } ')' 
 
 constexpr inline parse_result parser::parse_expression()
@@ -207,8 +207,8 @@ constexpr inline parse_result parser::parse_var_multiplication_token(node&& valu
 {
     PROPAGATE_ERROR(factor, parse_factor());
     factor = make_node<op_node>(std::make_unique<node>(std::move(value)),
-                                  std::make_unique<node>(std::move(factor)),
-                                  operation_type::mul);
+                                std::make_unique<node>(std::move(factor)),
+                                operation_type::mul);
 
     return factor_result;
 }
@@ -230,8 +230,8 @@ constexpr inline parse_result parser::parse_var()
 
     if (const auto [symbol_found, _] = current_token_is<token_type::alpha>(); symbol_found) {
         PROPAGATE_ERROR(symbol, parse_symbol());
-
         const auto& value = std::get<symbol_node>(symbol).value;
+
         if (const auto* function = find_function(value); function) {
             PROPAGATE_ERROR(function_call, parse_function_call(value));
             return function_call_result;
@@ -243,16 +243,30 @@ constexpr inline parse_result parser::parse_var()
             PROPAGATE_ERROR(multiplication, parse_var_multiplication_token(std::move(symbol)));
             return multiplication_result;
         }
+
+        return symbol_result;
     }
 
-    return parse_paren_expression();
+    if (const auto [paren_found, _] = current_token_is<token_type::paren_open>(); paren_found) {
+        PROPAGATE_ERROR(expr, parse_paren_expression());
+
+        if (const auto [mul_found, _] =
+            current_token_is<token_type::paren_open,
+                             token_type::alpha>(); mul_found) {
+            PROPAGATE_ERROR(multiplication, parse_var_multiplication_token(std::move(expr)));
+            return multiplication_result;
+        }
+
+        return expr_result;
+    }
+
+    return make_parse_error("Unexpected token.");
 }
 
 constexpr inline parse_result parser::parse_function_call(const std::string_view function_name)
 {
-    if (const auto [paren_found, _] = current_token_is<token_type::paren_open>(); !paren_found) {
+    if (const auto [paren_found, _] = current_token_is<token_type::paren_open>(); !paren_found)
         return make_parse_error("Expected function call.");
-    }
 
     assert(consume());
 
@@ -264,9 +278,10 @@ constexpr inline parse_result parser::parse_function_call(const std::string_view
         node.arguments.emplace_back(std::move(expr));
 
         if (const auto [close_token, type] =
-            current_token_is<token_type::comma, token_type::paren_close>(); !close_token) {
+            current_token_is<token_type::comma, token_type::paren_close>(); close_token) {
             if (type == token_type::comma) {
                 assert(consume());
+                continue;
             } else if (type == token_type::paren_close) {
                 assert(consume());
                 break;
@@ -284,15 +299,16 @@ constexpr inline parse_result parser::parse_symbol()
     if (const auto [is_symbol, _] = current_token_is<token_type::alpha>(); !is_symbol)
         return make_parse_error("Invalid symbol encountered.");
 
+    const auto& token = current().value().get();
     assert(consume());
 
-    return make_parse_result_node<symbol_node>(std::string{ current().value().get().value });
+    return make_parse_result_node<symbol_node>(token.value);
 }
 
 constexpr inline parse_result parser::parse_constant()
 {
     if (const auto [is_number, _] = current_token_is<token_type::number_literal>(); !is_number)
-        return make_parse_error("Invalid symbol encountered.");
+        return make_parse_error("Not a number.");
 
     auto number = number::from_token(current().value().get());
     if (!number.has_value())
@@ -306,7 +322,7 @@ constexpr inline parse_result parser::parse_constant()
 constexpr inline parse_result parser::parse(const std::span<const token> tokens)
 {
     if (tokens.size() == 0)
-        return parse_result{ std::unexpect_t{}, token{  }, "Expected expression",  };
+        return parse_result{ std::unexpect_t{}, token{}, "Expected expression",  };
 
     parser p;
     p.tokens = tokens;

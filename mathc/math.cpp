@@ -4,9 +4,10 @@
 #include <utility>
 #include <variant>
 
+#include <interpreter.hpp>
 #include <lexer.hpp>
 #include <parser.hpp>
-#include <interpreter.hpp>
+#include <token.hpp>
 
 using namespace mathc;
 
@@ -96,9 +97,11 @@ static_assert(test_equals("1.5^5", 7.59375));
 static_assert(test_equals("1^5", 1));
 static_assert(test_equals("2^2", 4));
 static_assert(test_equals("2^3", 8));
+static_assert(test_equals("sqrt(4)", 2.0));
 static_assert(test_equals("2^(-2)", 1.0/4.0));
 static_assert(test_equals("2^(-8)", 1.0/256.0));
 static_assert(test_equals("(1/2)/2", 1.0 / 4.0));
+static_assert(test_equals("(2)(2)", 4));
 static_assert(test_equals("1/2/2", 1.0 / 4.0));
 static_assert(test_equals("100/5/5", 4.0));
 #endif
@@ -116,12 +119,12 @@ int main(int argc, const char* argv[])
 
     const auto tokens = lexer::lex(source);
     // for(const auto& t : tokens)
-    //     std::println(stderr, "{} {}", token_type_str(t.type), t.value);
+    //     std::println(stderr, "{:20} {}", token_type_str(t.type), t.value);
 
     const auto root_node_result = parser::parse(std::span{ tokens });
     if (!root_node_result.has_value()) {
         const auto& error = root_node_result.error();
-        std::println(stderr, "{}", error.error);
+        std::println(stderr, "{} | token: {} {}", error.error, error.token.value, token_type_str(error.token.type));
         return 1;
     }
 
@@ -132,7 +135,7 @@ int main(int argc, const char* argv[])
     auto vm = mathc::vm{};
     const auto result_or_error = interpreter::simplify(root_node, vm);
     if (!result_or_error.has_value()) {
-        std::println("{}", result_or_error.error().error);
+        std::println(stderr, "{}", result_or_error.error().error);
         return 1;
     }
 
