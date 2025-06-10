@@ -115,27 +115,17 @@ constexpr inline parse_result parser::parse()
 // <constant> is builtin
 // <symbol> is builtin
 //
-// <expr> = ['+'|'-'] <term> { ('+'|'-') <term> }
+// <expr> = <term> { ('+'|'-') <term> }
 // <term> = <factor> { ('*'|'/') <factor> } [<implicit_multiplication>]
 // <implicit_multiplication> = [<number> | <paren_expression> | <symbol>]:<factor>
-// <factor> = <var> { ^ <var> }
+// <factor> = ['+'|'-'] <var> { ^ <var> }
 // <var> = <constant> | <symbol> [<function_call>] | <paren_expression>
 // <paren_expression> = '(' <expr> ')'
 // <function_call> = '(' <expr> { ',' <expr> } ')' 
 
 constexpr inline parse_result parser::parse_expression()
 {
-    bool negate{ false };
-    if (const auto [found, type] = current_token_is<token_type::op_add, token_type::op_sub>(); found) {
-        negate = (type == token_type::op_sub);
-        assert(consume());
-    }
-
     PROPAGATE_ERROR(term, parse_term());
-    if (negate)
-        term = make_node<op_node>(std::make_unique<node>(std::move(term)),
-                                  make_unique_node<constant_node>(number::from_int(-1)),
-                                  operation_type::mul);
 
     while(true) {
         const auto [found, type] = current_token_is<token_type::op_add, token_type::op_sub>();
@@ -184,7 +174,18 @@ constexpr inline parse_result parser::parse_term()
 
 constexpr inline parse_result parser::parse_factor()
 {
+    bool negate{ false };
+    if (const auto [found, type] = current_token_is<token_type::op_add, token_type::op_sub>(); found) {
+        negate = (type == token_type::op_sub);
+        assert(consume());
+    }
+
     PROPAGATE_ERROR(var, parse_var());
+
+    if (negate)
+        var = make_node<op_node>(std::make_unique<node>(std::move(var)),
+                                 make_unique_node<constant_node>(number::from_int(-1)),
+                                 operation_type::mul);
 
     while (true) {
         const auto [found, _] = current_token_is<token_type::op_exp>();
