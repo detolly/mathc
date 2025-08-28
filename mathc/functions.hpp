@@ -9,6 +9,12 @@
 namespace mathc
 {
 
+struct function
+{
+    std::string_view name;
+    std::optional<node>(&func)(const std::span<node> numbers);
+};
+
 constexpr static inline std::optional<node> vm_sqrt(const std::span<node> args)
 {
     if (args.size() > 1 || args.size() < 1)

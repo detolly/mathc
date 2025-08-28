@@ -12,14 +12,9 @@
 namespace mathc
 {
 
-struct interpreter
-{
-    constexpr static node simplify(const node& root_node, vm& vm);
-};
-
 // Implementation
 
-constexpr inline node interpreter::simplify(const node& root_node, vm& vm)
+constexpr inline node simplify(const node& root_node, vm& vm)
 {
     const struct
     {
@@ -28,24 +23,13 @@ constexpr inline node interpreter::simplify(const node& root_node, vm& vm)
 
         constexpr auto operator()(const op_node& op) const
         {
-            auto left_result = interpreter::simplify(*op.left, vm);
-            auto right_result = interpreter::simplify(*op.right, vm);
-
-            constexpr static struct {
-                constexpr static auto operator()(node&& n)
-                {
-                    return std::make_unique<node>(std::forward<node>(n));
-                }
-                constexpr static auto operator()(number&& n)
-                {
-                    return std::make_unique<node>(std::in_place_type_t<constant_node>{}, n);
-                }
-            } creator{};
+            auto left_result = simplify(*op.left, vm);
+            auto right_result = simplify(*op.right, vm);
 
             if (!std::holds_alternative<constant_node>(left_result) ||
                 !std::holds_alternative<constant_node>(right_result)) {
-                return make_node<op_node>(std::visit(creator, std::move(left_result)),
-                                          std::visit(creator, std::move(right_result)),
+                return make_node<op_node>(std::make_unique<node>(std::move(left_result)),
+                                          std::make_unique<node>(std::move(right_result)),
                                           op.type);
             }
 

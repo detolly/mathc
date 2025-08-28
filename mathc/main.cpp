@@ -4,16 +4,14 @@
 #include <utility>
 #include <variant>
 
-#include <interpreter.hpp>
+#include <simplify.hpp>
 #include <lexer.hpp>
 #include <parser.hpp>
 #include <token.hpp>
 
-using namespace mathc;
-
 struct printer
 {
-    void operator()(const op_node& op)
+    void operator()(const mathc::op_node& op)
     {
         std::print(stderr, "(");
 
@@ -28,17 +26,17 @@ struct printer
         std::print(stderr, ")");
     }
 
-    void operator()(const constant_node& op)
+    void operator()(const mathc::constant_node& op)
     {
         std::print(stderr, "{}", op.value);
     }
 
-    void operator()(const symbol_node& op)
+    void operator()(const mathc::symbol_node& op)
     {
         std::print(stderr, "{}", op.value);
     }
 
-    void operator()(const function_call_node& op)
+    void operator()(const mathc::function_call_node& op)
     {
         std::print(stderr, "{}(", op.function_name);
         for(auto i = 0u; i < op.arguments.size(); i++) {
@@ -51,7 +49,7 @@ struct printer
     }
 };
 
-static void print_tree(const node& root_node)
+static void print_tree(const mathc::node& root_node)
 {
     std::visit(printer{}, root_node);
 }
@@ -59,19 +57,19 @@ static void print_tree(const node& root_node)
 [[maybe_unused]]
 consteval static auto evaluate(const std::string_view source)
 {
-    const auto vec = lexer::lex(source);
+    const auto vec = mathc::lexer::lex(source);
     assert(vec.size() > 0);
 
-    const auto node_result = parser::parse(vec);
+    const auto node_result = mathc::parser::parse(vec);
     assert(node_result.has_value());
 
     const auto& node = node_result.value();
     auto vm = mathc::vm{};
 
-    auto result = interpreter::simplify(node, vm);
-    assert(std::holds_alternative<constant_node>(result));
+    auto result = mathc::simplify(node, vm);
+    assert(std::holds_alternative<mathc::constant_node>(result));
 
-    return std::get<constant_node>(result).value;
+    return std::get<mathc::constant_node>(result).value;
 }
 
 #ifndef NO_TEST
@@ -177,11 +175,11 @@ int main(int argc, const char* argv[])
     const auto source = std::string_view{ argv[1] };
     #pragma GCC diagnostic pop
 
-    const auto tokens = lexer::lex(source);
+    const auto tokens = mathc::lexer::lex(source);
     // for(const auto& t : tokens)
     //     std::println(stderr, "{:20} {}", token_type_str(t.type), t.value);
 
-    const auto root_node_result = parser::parse(std::span{ tokens });
+    const auto root_node_result = mathc::parser::parse(std::span{ tokens });
     if (!root_node_result.has_value()) {
         const auto& error = root_node_result.error();
         std::println(stderr, "{} | token: {} {}", error.error, error.token.value, token_type_str(error.token.type));
@@ -193,13 +191,13 @@ int main(int argc, const char* argv[])
     std::puts("");
 
     auto vm = mathc::vm{};
-    const auto result = interpreter::simplify(root_node, vm);
-    if (!std::holds_alternative<constant_node>(result)) {
+    const auto result = mathc::simplify(root_node, vm);
+    if (!std::holds_alternative<mathc::constant_node>(result)) {
         print_tree(result);
         std::puts("");
         return 0;
     }
 
-    std::println("{}", std::get<constant_node>(result).value);
+    std::println("{}", std::get<mathc::constant_node>(result).value);
     return 0;
 }

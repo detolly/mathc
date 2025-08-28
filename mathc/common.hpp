@@ -18,11 +18,4 @@ namespace mathc
 
 #pragma GCC diagnostic pop
 
-struct function
-{
-    std::string_view name;
-    std::optional<node>(&func)(const std::span<node> numbers);
-};
-
-
 }
