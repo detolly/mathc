@@ -31,6 +31,42 @@ constexpr inline node operate(number a, number b, operation_type type)
     }
 }
 
+constexpr inline bool constant_fold(op_node& root_op)
+{
+    const auto constant_move = [](auto& node_to_check, auto& other_node, auto& to_replace) {
+        if (!std::holds_alternative<constant_node>(*node_to_check))
+            return false;
+
+        if (std::holds_alternative<constant_node>(*to_replace))
+            std::swap(other_node, to_replace);
+        else
+            std::swap(node_to_check, to_replace);
+
+        return true;
+    };
+
+    const auto fold = [&constant_move](auto& root_node_to_check, auto& to_replace, auto root_op_type){
+        if (!std::holds_alternative<op_node>(*root_node_to_check))
+            return false;
+
+        auto& checking_op = std::get<op_node>(*root_node_to_check);
+        if (checking_op.type != root_op_type)
+            return false;
+
+        bool did_move = constant_move(checking_op.left, checking_op.right, to_replace);
+        if (!did_move)
+            did_move = constant_move(checking_op.right, checking_op.left, to_replace);
+
+        return did_move;
+    };
+
+    bool did_fold = fold(root_op.right, root_op.left, root_op.type);
+    if (!did_fold)
+        did_fold = fold(root_op.left, root_op.right, root_op.type);
+
+    return did_fold;
+}
+
 constexpr inline void simplify(node& root_node, vm& vm)
 {
     const struct
@@ -43,42 +79,10 @@ constexpr inline void simplify(node& root_node, vm& vm)
             simplify(*root_op.left, vm);
             simplify(*root_op.right, vm);
 
-            auto& vm2 = vm;
-
-            if (!std::holds_alternative<constant_node>(*root_op.left) || !std::holds_alternative<constant_node>(*root_op.right)) {
-                const auto constant_move = [&vm2](auto& root_node_to_check, auto& node_to_check, auto& other_side, auto& to_replace, auto op_type) {
-                    if (std::holds_alternative<constant_node>(*node_to_check)) {
-                        if (std::holds_alternative<constant_node>(*to_replace)) {
-                            to_replace = std::make_unique<node>(make_node<op_node>(std::move(node_to_check),
-                                                                                   std::move(to_replace),
-                                                                                   op_type));
-                            root_node_to_check = std::move(other_side);
-                            simplify(*to_replace, vm2);
-                            return true;
-                        }
-                        std::swap(node_to_check, to_replace);
-                        return true;
-                    }
-                    return false;
-                };
-
-                const auto constant_fold = [&constant_move](auto& root_node_to_check, auto& to_replace, auto root_op_type){
-                    if (std::holds_alternative<op_node>(*root_node_to_check)) {
-                        auto& checking_op = std::get<op_node>(*root_node_to_check);
-                        if (checking_op.type == root_op_type) {
-                            bool changed = constant_move(root_node_to_check, checking_op.left, checking_op.right, to_replace, checking_op.type);
-                            if (!changed)
-                                changed = constant_move(root_node_to_check, checking_op.right, checking_op.left, to_replace, checking_op.type);
-                            return changed;
-                        }
-                    }
-                    return false;
-                };
-
-                bool switched = constant_fold(root_op.right, root_op.left, root_op.type);
-                if (!switched)
-                    switched = constant_fold(root_op.left, root_op.right, root_op.type);
-
+            if (!std::holds_alternative<constant_node>(*root_op.left) ||
+                !std::holds_alternative<constant_node>(*root_op.right)) {
+                if (constant_fold(root_op))
+                    simplify(root_node, vm);
                 return;
             }
 
