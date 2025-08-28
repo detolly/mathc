@@ -14,74 +14,73 @@ namespace mathc
 
 // Implementation
 
-constexpr inline node simplify(const node& root_node, vm& vm)
+constexpr inline void simplify(node& root_node, vm& vm)
 {
     const struct
     {
-        const node& root_node;
+        node& root_node;
         struct vm& vm;
 
-        constexpr auto operator()(const op_node& op) const
+        constexpr auto operator()(op_node& op) const
         {
-            auto left_result = simplify(*op.left, vm);
-            auto right_result = simplify(*op.right, vm);
+            simplify(*op.left, vm);
+            simplify(*op.right, vm);
 
-            if (!std::holds_alternative<constant_node>(left_result) ||
-                !std::holds_alternative<constant_node>(right_result)) {
-                return make_node<op_node>(std::make_unique<node>(std::move(left_result)),
-                                          std::make_unique<node>(std::move(right_result)),
-                                          op.type);
-            }
+            if (!std::holds_alternative<constant_node>(*op.left) || !std::holds_alternative<constant_node>(*op.right))
+                return;
 
-            const auto& left_result_number = std::get<constant_node>(left_result);
-            const auto& right_result_number = std::get<constant_node>(right_result);
+            const auto left_result_number = std::get<constant_node>(*op.left);
+            const auto right_result_number = std::get<constant_node>(*op.right);
 
             switch(op.type) {
                 case operation_type::mul:
-                    return make_node<constant_node>(left_result_number.value * right_result_number.value);
+                    root_node = make_node<constant_node>(left_result_number.value * right_result_number.value);
+                    break;
                 case operation_type::div:
-                    return make_node<constant_node>(left_result_number.value / right_result_number.value);
+                    root_node = make_node<constant_node>(left_result_number.value / right_result_number.value);
+                    break;
                 case operation_type::add:
-                    return make_node<constant_node>(left_result_number.value + right_result_number.value);
+                    root_node = make_node<constant_node>(left_result_number.value + right_result_number.value);
+                    break;
                 case operation_type::sub:
-                    return make_node<constant_node>(left_result_number.value - right_result_number.value);
+                    root_node = make_node<constant_node>(left_result_number.value - right_result_number.value);
+                    break;
                 case operation_type::exp:
-                    return make_node<constant_node>(left_result_number.value ^ right_result_number.value);
+                    root_node = make_node<constant_node>(left_result_number.value ^ right_result_number.value);
+                    break;
             }
-
-            std::unreachable();
         }
 
-        constexpr auto operator()(const constant_node& c) const
+        constexpr auto operator()(constant_node&) const
         {
-            return make_node<constant_node>(c.value);
+            return;
         }
 
-        constexpr auto operator()(const symbol_node& symbol) const
+        constexpr auto operator()(symbol_node& symbol) const
         {
             auto symbol_node = vm.symbol_node(symbol.value);
-            if (symbol_node.has_value())
-                return simplify(symbol_node.value(), vm);
+            if (!symbol_node.has_value())
+                return;
 
-            return copy_node(root_node);
+            auto& n = symbol_node.value();
+            simplify(n, vm);
+            root_node = std::move(n);
         }
 
-        constexpr auto operator()(const function_call_node& function_call) const
+        constexpr auto operator()(function_call_node& function_call) const
         {
             const auto function = find_function(function_call.function_name);
             if (!function.has_value())
-                return copy_function_node(function_call);
+                return;
 
-            std::vector<node> simplified_arguments;
-            simplified_arguments.reserve(function_call.arguments.size());
             for(auto i = 0u; i < function_call.arguments.size(); i++)
-                simplified_arguments.emplace_back(simplify(function_call.arguments[i], vm));
+                simplify(function_call.arguments[i], vm);
 
-            const auto result = function->func(simplified_arguments);
-            if (result.has_value())
-                return copy_node(result.value());
-
-            return make_node<function_call_node>(function_call.function_name, std::move(simplified_arguments));
+            auto result = function->func(function_call.arguments);
+            if (result.has_value()) {
+                root_node = std::move(result.value());
+                return;
+            }
         }
     } simplify_visitor{ root_node, vm };
 

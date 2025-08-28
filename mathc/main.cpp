@@ -60,16 +60,15 @@ consteval static auto evaluate(const std::string_view source)
     const auto vec = mathc::lexer::lex(source);
     assert(vec.size() > 0);
 
-    const auto node_result = mathc::parser::parse(vec);
+    auto node_result = mathc::parser::parse(vec);
     assert(node_result.has_value());
 
-    const auto& node = node_result.value();
+    auto& node = node_result.value();
     auto vm = mathc::vm{};
+    mathc::simplify(node, vm);
 
-    auto result = mathc::simplify(node, vm);
-    assert(std::holds_alternative<mathc::constant_node>(result));
-
-    return std::get<mathc::constant_node>(result).value;
+    assert(std::holds_alternative<mathc::constant_node>(node));
+    return std::get<mathc::constant_node>(node).value;
 }
 
 #ifndef NO_TEST
@@ -179,25 +178,25 @@ int main(int argc, const char* argv[])
     // for(const auto& t : tokens)
     //     std::println(stderr, "{:20} {}", token_type_str(t.type), t.value);
 
-    const auto root_node_result = mathc::parser::parse(std::span{ tokens });
+    auto root_node_result = mathc::parser::parse(std::span{ tokens });
     if (!root_node_result.has_value()) {
         const auto& error = root_node_result.error();
         std::println(stderr, "{} | token: {} {}", error.error, error.token.value, token_type_str(error.token.type));
         return 1;
     }
 
-    const auto& root_node = root_node_result.value();
+    auto& root_node = root_node_result.value();
     print_tree(root_node);
     std::puts("");
 
     auto vm = mathc::vm{};
-    const auto result = mathc::simplify(root_node, vm);
-    if (!std::holds_alternative<mathc::constant_node>(result)) {
-        print_tree(result);
+    mathc::simplify(root_node, vm);
+    if (!std::holds_alternative<mathc::constant_node>(root_node)) {
+        print_tree(root_node);
         std::puts("");
         return 0;
     }
 
-    std::println("{}", std::get<mathc::constant_node>(result).value);
+    std::println("{}", std::get<mathc::constant_node>(root_node).value);
     return 0;
 }
