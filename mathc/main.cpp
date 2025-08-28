@@ -11,50 +11,49 @@
 
 using namespace mathc;
 
-static void print_tree(const node& root_node)
+struct printer
 {
-    if(std::holds_alternative<op_node>(root_node)) {
-        const auto& op = std::get<op_node>(root_node);
+    void operator()(const op_node& op)
+    {
         std::print(stderr, "(");
 
         if (op.left.get())
-            print_tree(*op.left);
+            std::visit(printer{}, *op.left);
 
         std::print(stderr, "{}", operation_type_to_string(op.type));
 
         if (op.right.get())
-            print_tree(*op.right);
+            std::visit(printer{}, *op.right);
 
         std::print(stderr, ")");
-        return;
     }
 
-    else if (std::holds_alternative<constant_node>(root_node)) {
-        const auto& op = std::get<constant_node>(root_node);
+    void operator()(const constant_node& op)
+    {
         std::print(stderr, "{}", op.value);
-        return;
     }
 
-    else if(std::holds_alternative<symbol_node>(root_node)) {
-        const auto& op = std::get<symbol_node>(root_node);
+    void operator()(const symbol_node& op)
+    {
         std::print(stderr, "{}", op.value);
-        return;
     }
 
-    else if(std::holds_alternative<function_call_node>(root_node)) {
-        const auto& op = std::get<function_call_node>(root_node);
+    void operator()(const function_call_node& op)
+    {
         std::print(stderr, "{}(", op.function_name);
         for(auto i = 0u; i < op.arguments.size(); i++) {
             const auto& argument = op.arguments[i];
-            print_tree(argument);
+            std::visit(printer{}, argument);
             if (i != op.arguments.size() - 1)
                 std::print(stderr, ", ");
         }
         std::print(stderr, ")");
-        return;
     }
+};
 
-    std::unreachable();
+static void print_tree(const node& root_node)
+{
+    std::visit(printer{}, root_node);
 }
 
 [[maybe_unused]]
@@ -69,13 +68,16 @@ consteval static auto evaluate(const std::string_view source)
     const auto& node = node_result.value();
     auto vm = mathc::vm{};
 
-    return interpreter::simplify(node, vm);
+    auto result = interpreter::simplify(node, vm);
+    assert(std::holds_alternative<constant_node>(result));
+
+    return std::get<constant_node>(result).value;
 }
 
 #ifndef NO_TEST
 consteval static bool test_equals(const std::string_view source, auto v)
 {
-    return std::get<number>(evaluate(source).value()).approx_equals(v);
+    return evaluate(source).approx_equals(v);
 }
 
 static_assert(test_equals("1+1", 2));
@@ -191,19 +193,13 @@ int main(int argc, const char* argv[])
     std::puts("");
 
     auto vm = mathc::vm{};
-    const auto result_or_error = interpreter::simplify(root_node, vm);
-    if (!result_or_error.has_value()) {
-        std::println(stderr, "{}", result_or_error.error().error);
-        return 1;
-    }
-
-    const auto& result = result_or_error.value();
-    if (std::holds_alternative<node>(result)) {
-        print_tree(std::get<node>(result));
+    const auto result = interpreter::simplify(root_node, vm);
+    if (!std::holds_alternative<constant_node>(result)) {
+        print_tree(result);
         std::puts("");
         return 0;
     }
 
-    std::println("{}", std::get<number>(result));
+    std::println("{}", std::get<constant_node>(result).value);
     return 0;
 }

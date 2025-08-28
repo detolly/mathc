@@ -94,6 +94,12 @@ constexpr static inline std::vector<node> copy_arguments(const function_call_nod
     return arguments;
 }
 
+constexpr static auto copy_function_node(const function_call_node& f)
+{
+    return make_node<function_call_node>(f.function_name,
+                                         copy_arguments(f));
+}
+
 constexpr static struct
 {
     constexpr static auto operator()(const op_node& op)
@@ -104,8 +110,7 @@ constexpr static struct
     }
     constexpr static auto operator()(const function_call_node& op)
     {
-        return make_node<function_call_node>(op.function_name,
-                                             copy_arguments(op));
+        return copy_function_node(op);
     }
     constexpr static auto operator()(const symbol_node& op) { return make_node<symbol_node>(op); }
     constexpr static auto operator()(const constant_node& op) { return make_node<constant_node>(op); }

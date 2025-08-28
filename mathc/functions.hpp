@@ -9,48 +9,57 @@
 namespace mathc
 {
 
-constexpr static inline execution_result vm_sqrt(const std::span<number> args)
+constexpr static inline std::optional<node> vm_sqrt(const std::span<node> args)
 {
     if (args.size() > 1 || args.size() < 1)
-        return make_execution_error(std::format("sqrt expects 1 argument, got {}", args.size()));
+        return {};
 
     const auto& arg = args[0];
-    return make_execution_result<number>(math::sqrt(arg.promote_to_double()));
+    if (!std::holds_alternative<constant_node>(arg))
+        return {};
+
+    return make_node<constant_node>(math::sqrt(std::get<constant_node>(arg).value.promote_to_double()));
 }
 
-constexpr static inline execution_result vm_log2(const std::span<number> args)
+constexpr static inline std::optional<node> vm_log2(const std::span<node> args)
 {
     if (args.size() > 1 || args.size() < 1)
-        return make_execution_error(std::format("log2 expects 1 argument, got {}", args.size()));
+        return {};
 
     const auto& arg = args[0];
-    return make_execution_result<number>(math::log2(arg.promote_to_double()));
+    if (!std::holds_alternative<constant_node>(arg))
+        return {};
+
+    return make_node<constant_node>(math::log2(std::get<constant_node>(arg).value.promote_to_double()));
 }
 
-constexpr static inline execution_result vm_ln(const std::span<number> args)
+constexpr static inline std::optional<node> vm_ln(const std::span<node> args)
 {
     if (args.size() > 1 || args.size() < 1)
-        return make_execution_error(std::format("ln expects 1 argument, got {}", args.size()));
+        return {};
 
     const auto& arg = args[0];
-    return make_execution_result<number>(math::log(arg.promote_to_double()));
+    if (!std::holds_alternative<constant_node>(arg))
+        return {};
+    
+    return make_node<constant_node>(math::log(std::get<constant_node>(arg).value.promote_to_double()));
 }
 
 constexpr static const auto functions =
 {
-    function{ "sqrt",  vm_sqrt },
-    function{ "log2",  vm_log2 },
-    function{ "ln",    vm_ln   },
+    function{ "sqrt"sv,  vm_sqrt },
+    function{ "log2"sv,  vm_log2 },
+    function{ "ln"sv,    vm_ln   },
 };
 
 [[nodiscard]]
-constexpr static inline const function* find_function(const std::string_view function)
+constexpr static inline const std::optional<function> find_function(const std::string_view function)
 {
     for(const auto& f : functions)
         if (f.name == function)
-            return &f;
+            return f;
 
-    return nullptr;
+    return {};
 }
 
 }
