@@ -5,6 +5,7 @@
 #include <common.hpp>
 #include <math.hpp>
 #include <number.hpp>
+#include <variant>
 
 namespace mathc
 {
@@ -17,7 +18,7 @@ struct function
 
 constexpr static inline std::optional<node> vm_sqrt(const std::span<node> args)
 {
-    if (args.size() > 1 || args.size() < 1)
+    if (args.size() != 1)
         return {};
 
     const auto& arg = args[0];
@@ -29,7 +30,7 @@ constexpr static inline std::optional<node> vm_sqrt(const std::span<node> args)
 
 constexpr static inline std::optional<node> vm_log2(const std::span<node> args)
 {
-    if (args.size() > 1 || args.size() < 1)
+    if (args.size() != 1)
         return {};
 
     const auto& arg = args[0];
@@ -39,9 +40,33 @@ constexpr static inline std::optional<node> vm_log2(const std::span<node> args)
     return make_node<constant_node>(math::log2(std::get<constant_node>(arg).value.promote_to_double()));
 }
 
+constexpr static inline std::optional<node> vm_sum(const std::span<node> args)
+{
+    if (args.size() != 2)
+        return {};
+
+    const auto& amin = args[0];
+    const auto& amax = args[1];
+    if (!std::holds_alternative<constant_node>(amin) ||
+        !std::holds_alternative<constant_node>(amax))
+        return {};
+
+    const auto& min = std::get<constant_node>(args[0]).value;
+    const auto& max = std::get<constant_node>(args[1]).value;
+    if (!min.is_int() || !max.is_int())
+        return {};
+
+    std::int64_t sum{ 0 };
+    for(auto i = min.as_int(); i < max.as_int(); i++) {
+        sum += i;
+    }
+
+    return make_node<constant_node>(number::from_int(sum));
+}
+
 constexpr static inline std::optional<node> vm_ln(const std::span<node> args)
 {
-    if (args.size() > 1 || args.size() < 1)
+    if (args.size() != 1)
         return {};
 
     const auto& arg = args[0];
@@ -56,6 +81,7 @@ constexpr static const auto functions =
     function{ "sqrt"sv,  vm_sqrt },
     function{ "log2"sv,  vm_log2 },
     function{ "ln"sv,    vm_ln   },
+    function{ "sum"sv,   vm_sum   },
 };
 
 [[nodiscard]]

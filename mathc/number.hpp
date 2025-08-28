@@ -21,8 +21,8 @@ struct number
     constexpr inline bool is_int() const { return std::holds_alternative<std::int64_t>(impl); }
     constexpr inline bool is_double() const { return std::holds_alternative<double>(impl); }
 
-    constexpr inline auto as_int() const { return std::get<std::int64_t>(impl); }
-    constexpr inline auto as_double() const { return std::get<double>(impl); }
+    constexpr inline std::int64_t as_int() const { return std::get<std::int64_t>(impl); }
+    constexpr inline double as_double() const { return std::get<double>(impl); }
 
     constexpr inline auto promote_to_double() const
     {
