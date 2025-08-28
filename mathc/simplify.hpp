@@ -31,13 +31,39 @@ constexpr inline node operate(number a, number b, operation_type type)
     }
 }
 
+constexpr inline bool is_associative(operation_type type)
+{
+    switch(type) {
+        case mathc::operation_type::add:
+        case mathc::operation_type::mul:
+            return true;
+        case mathc::operation_type::sub:
+        case mathc::operation_type::exp:
+        case mathc::operation_type::div:
+            return false;
+    }
+}
+
+constexpr inline bool is_commutative(operation_type type)
+{
+    switch(type) {
+        case mathc::operation_type::add:
+        case mathc::operation_type::mul:
+            return true;
+        case mathc::operation_type::sub:
+        case mathc::operation_type::exp:
+        case mathc::operation_type::div:
+            return false;
+    }
+}
+
 constexpr inline bool constant_fold(op_node& root_op)
 {
-    const auto constant_move = [](auto& node_to_check, auto& other_node, auto& to_replace) {
+    const auto constant_move = [&root_op](auto& node_to_check, auto& other_node, auto& to_replace) {
         if (!std::holds_alternative<constant_node>(*node_to_check))
             return false;
 
-        if (std::holds_alternative<constant_node>(*to_replace))
+        if (std::holds_alternative<constant_node>(*to_replace) && is_associative(root_op.type))
             std::swap(other_node, to_replace);
         else
             std::swap(node_to_check, to_replace);
@@ -61,7 +87,7 @@ constexpr inline bool constant_fold(op_node& root_op)
     };
 
     bool did_fold = fold(root_op.right, root_op.left, root_op.type);
-    if (!did_fold)
+    if (!did_fold && is_commutative(root_op.type))
         did_fold = fold(root_op.left, root_op.right, root_op.type);
 
     return did_fold;
