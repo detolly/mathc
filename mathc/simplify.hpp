@@ -15,7 +15,7 @@ namespace mathc
 
 // Implementation
 
-constexpr inline node operate(number a, number b, operation_type type)
+constexpr static inline node operate(const number& a, const number& b, operation_type type)
 {
     switch(type) {
         case operation_type::mul:
@@ -31,7 +31,7 @@ constexpr inline node operate(number a, number b, operation_type type)
     }
 }
 
-constexpr inline bool is_associative(operation_type type)
+constexpr static inline bool is_associative(operation_type type)
 {
     switch(type) {
         case mathc::operation_type::add:
@@ -44,7 +44,7 @@ constexpr inline bool is_associative(operation_type type)
     }
 }
 
-constexpr inline bool is_commutative(operation_type type)
+constexpr static inline bool is_commutative(operation_type type)
 {
     switch(type) {
         case mathc::operation_type::add:
@@ -57,7 +57,7 @@ constexpr inline bool is_commutative(operation_type type)
     }
 }
 
-constexpr inline bool constant_fold(op_node& root_op)
+constexpr static inline bool constant_fold(op_node& root_op)
 {
     const auto constant_move = [&root_op](auto& node_to_check, auto& other_node, auto& to_replace) {
         if (!std::holds_alternative<constant_node>(*node_to_check))
@@ -110,16 +110,13 @@ constexpr inline void simplify(node& root_node, vm& vm)
                 return;
             }
 
-            const auto left_result_number = std::get<constant_node>(*root_op.left).value;
-            const auto right_result_number = std::get<constant_node>(*root_op.right).value;
+            const auto& left_result_number = std::get<constant_node>(*root_op.left).value;
+            const auto& right_result_number = std::get<constant_node>(*root_op.right).value;
 
             root_node = operate(left_result_number, right_result_number, root_op.type);
         }
 
-        constexpr auto operator()(constant_node&) const
-        {
-
-        }
+        constexpr auto operator()(constant_node&) const {}
 
         constexpr auto operator()(symbol_node& symbol) const
         {
@@ -142,10 +139,8 @@ constexpr inline void simplify(node& root_node, vm& vm)
                 simplify(function_call.arguments[i], vm);
 
             auto result = function->func(function_call.arguments);
-            if (result.has_value()) {
+            if (result.has_value())
                 root_node = std::move(result.value());
-                return;
-            }
         }
     } simplify_visitor{ root_node, vm };
 

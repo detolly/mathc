@@ -16,6 +16,12 @@ struct function
     std::optional<node>(&func)(const std::span<node> numbers);
 };
 
+template<typename T, typename... Args>
+constexpr static inline std::optional<node> make_function_result(Args&& ...args)
+{
+    return std::make_optional<node>(std::in_place_type_t<T>{}, std::forward<Args>(args)...);
+}
+
 constexpr static inline std::optional<node> vm_sqrt(const std::span<node> args)
 {
     if (args.size() != 1)
@@ -25,7 +31,7 @@ constexpr static inline std::optional<node> vm_sqrt(const std::span<node> args)
     if (!std::holds_alternative<constant_node>(arg))
         return {};
 
-    return make_node<constant_node>(math::sqrt(std::get<constant_node>(arg).value.promote_to_double()));
+    return make_function_result<constant_node>(math::sqrt(std::get<constant_node>(arg).value.promote_to_double()));
 }
 
 constexpr static inline std::optional<node> vm_log2(const std::span<node> args)
@@ -37,7 +43,7 @@ constexpr static inline std::optional<node> vm_log2(const std::span<node> args)
     if (!std::holds_alternative<constant_node>(arg))
         return {};
 
-    return make_node<constant_node>(math::log2(std::get<constant_node>(arg).value.promote_to_double()));
+    return make_function_result<constant_node>(math::log2(std::get<constant_node>(arg).value.promote_to_double()));
 }
 
 constexpr static inline std::optional<node> vm_sum(const std::span<node> args)
@@ -60,7 +66,7 @@ constexpr static inline std::optional<node> vm_sum(const std::span<node> args)
     for(auto i = min.as_int(); i < max.as_int(); i++)
         sum += i;
 
-    return make_node<constant_node>(number::from_int(sum));
+    return make_function_result<constant_node>(number::from_int(sum));
 }
 
 constexpr static inline std::optional<node> vm_ln(const std::span<node> args)
@@ -71,8 +77,8 @@ constexpr static inline std::optional<node> vm_ln(const std::span<node> args)
     const auto& arg = args[0];
     if (!std::holds_alternative<constant_node>(arg))
         return {};
-    
-    return make_node<constant_node>(math::log(std::get<constant_node>(arg).value.promote_to_double()));
+
+    return make_function_result<constant_node>(math::log(std::get<constant_node>(arg).value.promote_to_double()));
 }
 
 constexpr static const auto functions =
@@ -84,11 +90,11 @@ constexpr static const auto functions =
 };
 
 [[nodiscard]]
-constexpr static inline const std::optional<function> find_function(const std::string_view function)
+constexpr static inline std::optional<function> find_function(const std::string_view function_name)
 {
     for(const auto& f : functions)
-        if (f.name == function)
-            return f;
+        if (f.name == function_name)
+            return std::make_optional<function>(f);
 
     return {};
 }
