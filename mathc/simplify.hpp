@@ -79,16 +79,14 @@ constexpr inline bool constant_fold(op_node& root_op)
         if (checking_op.type != root_op_type)
             return false;
 
-        bool did_move = constant_move(checking_op.left, checking_op.right, to_replace);
-        if (!did_move)
-            did_move = constant_move(checking_op.right, checking_op.left, to_replace);
+        bool did_move = constant_move(checking_op.left, checking_op.right, to_replace) ||
+                        constant_move(checking_op.right, checking_op.left, to_replace);
 
         return did_move;
     };
 
-    bool did_fold = fold(root_op.right, root_op.left, root_op.type);
-    if (!did_fold && is_commutative(root_op.type))
-        did_fold = fold(root_op.left, root_op.right, root_op.type);
+    bool did_fold = fold(root_op.right, root_op.left, root_op.type) ||
+                    (is_commutative(root_op.type) && fold(root_op.left, root_op.right, root_op.type));
 
     return did_fold;
 }

@@ -57,9 +57,8 @@ constexpr static inline std::optional<node> vm_sum(const std::span<node> args)
         return {};
 
     std::int64_t sum{ 0 };
-    for(auto i = min.as_int(); i < max.as_int(); i++) {
+    for(auto i = min.as_int(); i < max.as_int(); i++)
         sum += i;
-    }
 
     return make_node<constant_node>(number::from_int(sum));
 }
