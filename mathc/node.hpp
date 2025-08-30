@@ -22,19 +22,6 @@ enum class operation_type
     exp
 };
 
-constexpr static inline std::string_view operation_type_to_string_view(operation_type type)
-{
-    switch(type) {
-        case operation_type::mul: return "*"sv;
-        case operation_type::div: return "/"sv;
-        case operation_type::add: return "+"sv;
-        case operation_type::sub: return "-"sv;
-        case operation_type::exp: return "^"sv;
-    }
-
-    std::unreachable();
-}
-
 template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
 struct op_node_t;
 template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
@@ -87,6 +74,10 @@ using constant_node = constant_node_t<node_ptr_t, node_vector_t, node_string_t>;
 using symbol_node = symbol_node_t<node_ptr_t, node_vector_t, node_string_t>;
 using function_call_node = function_call_node_t<node_ptr_t, node_vector_t, node_string_t>;
 using op_node = op_node_t<node_ptr_t, node_vector_t, node_string_t>;
+
+
+// Utilities
+
 
 template<typename T>
 concept node_type = []<typename... Ts>(std::variant<Ts...>) {
@@ -142,6 +133,19 @@ constexpr static struct
 constexpr static inline node copy_node(const auto& n)
 {
     return std::visit(copy_visitor, n);
+}
+
+constexpr static inline std::string_view operation_type_to_string_view(operation_type type)
+{
+    switch(type) {
+        case operation_type::mul: return "*"sv;
+        case operation_type::div: return "/"sv;
+        case operation_type::add: return "+"sv;
+        case operation_type::sub: return "-"sv;
+        case operation_type::exp: return "^"sv;
+    }
+
+    std::unreachable();
 }
 
 }
