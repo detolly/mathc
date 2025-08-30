@@ -22,58 +22,56 @@ enum class operation_type
     exp
 };
 
+#define node_template \
 template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct op_node_t;
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct constant_node_t;
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct symbol_node_t;
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct function_call_node_t;
 
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+node_template struct op_node_t;
+node_template struct constant_node_t;
+node_template struct symbol_node_t;
+node_template struct function_call_node_t;
+
+node_template
 using node_t = std::variant<op_node_t<ptr, vector, string>,
                             constant_node_t<ptr, vector, string>,
                             symbol_node_t<ptr, vector, string>,
                             function_call_node_t<ptr, vector, string>>;
 
+#define template_node_t node_t<ptr, vector, string>
+
 template<typename T> using node_ptr_t    = std::unique_ptr<T>;
 template<typename T> using node_vector_t = std::vector<T>;
                      using node_string_t = std::string;
 
-using node = node_t<node_ptr_t, node_vector_t, node_string_t>;
+#define runtime_node_template_arguments node_ptr_t, node_vector_t, node_string_t
+using node = node_t<runtime_node_template_arguments>;
 
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct constant_node_t
+node_template struct constant_node_t
 {
     number value;
 };
 
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct symbol_node_t
+node_template struct symbol_node_t
 {
     string value;
 };
 
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct function_call_node_t
+node_template struct function_call_node_t
 {
     string function_name;
-    vector<node_t<ptr, vector, string>> arguments;
+    vector<template_node_t> arguments;
 };
 
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
-struct op_node_t
+node_template struct op_node_t
 {
-    ptr<node_t<ptr, vector, string>> left;
-    ptr<node_t<ptr, vector, string>> right;
+    ptr<template_node_t> left;
+    ptr<template_node_t> right;
     operation_type type;
 };
 
-using constant_node = constant_node_t<node_ptr_t, node_vector_t, node_string_t>;
-using symbol_node = symbol_node_t<node_ptr_t, node_vector_t, node_string_t>;
-using function_call_node = function_call_node_t<node_ptr_t, node_vector_t, node_string_t>;
-using op_node = op_node_t<node_ptr_t, node_vector_t, node_string_t>;
+using constant_node = constant_node_t<runtime_node_template_arguments>;
+using symbol_node = symbol_node_t<runtime_node_template_arguments>;
+using function_call_node = function_call_node_t<runtime_node_template_arguments>;
+using op_node = op_node_t<runtime_node_template_arguments>;
 
 
 // Utilities
