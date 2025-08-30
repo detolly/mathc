@@ -13,21 +13,14 @@
 namespace mathc
 {
 
-// Implementation
-
 constexpr static inline node operate(const number& a, const number& b, operation_type type)
 {
     switch(type) {
-        case operation_type::mul:
-            return make_node<constant_node>(a * b);
-        case operation_type::div:
-            return make_node<constant_node>(a / b);
-        case operation_type::add:
-            return make_node<constant_node>(a + b);
-        case operation_type::sub:
-            return make_node<constant_node>(a - b);
-        case operation_type::exp:
-            return make_node<constant_node>(a ^ b);
+        case operation_type::mul: return make_node<constant_node>(a * b);
+        case operation_type::div: return make_node<constant_node>(a / b);
+        case operation_type::add: return make_node<constant_node>(a + b);
+        case operation_type::sub: return make_node<constant_node>(a - b);
+        case operation_type::exp: return make_node<constant_node>(a ^ b);
     }
 }
 

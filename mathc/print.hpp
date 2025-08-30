@@ -16,7 +16,7 @@ struct printer
         if (op.left.get())
             std::visit(printer{}, *op.left);
 
-        std::print(stderr, "{}", operation_type_to_string(op.type));
+        std::print(stderr, "{}", operation_type_to_string_view(op.type));
 
         if (op.right.get())
             std::visit(printer{}, *op.right);

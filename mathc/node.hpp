@@ -22,7 +22,7 @@ enum class operation_type
     exp
 };
 
-constexpr static inline auto operation_type_to_string(operation_type type)
+constexpr static inline std::string_view operation_type_to_string_view(operation_type type)
 {
     switch(type) {
         case operation_type::mul: return "*"sv;
@@ -35,35 +35,58 @@ constexpr static inline auto operation_type_to_string(operation_type type)
     std::unreachable();
 }
 
-struct op_node;
-struct constant_node;
-struct symbol_node;
-struct function_call_node;
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct op_node_t;
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct constant_node_t;
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct symbol_node_t;
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct function_call_node_t;
 
-using node = std::variant<op_node, constant_node, symbol_node, function_call_node>;
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+using node_t = std::variant<op_node_t<ptr, vector, string>,
+                            constant_node_t<ptr, vector, string>,
+                            symbol_node_t<ptr, vector, string>,
+                            function_call_node_t<ptr, vector, string>>;
 
-struct constant_node
+template<typename T> using node_ptr_t    = std::unique_ptr<T>;
+template<typename T> using node_vector_t = std::vector<T>;
+                     using node_string_t = std::string;
+
+using node = node_t<node_ptr_t, node_vector_t, node_string_t>;
+
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct constant_node_t
 {
     number value;
 };
 
-struct symbol_node
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct symbol_node_t
 {
-    std::string value;
+    string value;
 };
 
-struct function_call_node
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct function_call_node_t
 {
-    std::string function_name;
-    std::vector<node> arguments;
+    string function_name;
+    vector<node_t<ptr, vector, string>> arguments;
 };
 
-struct op_node
+template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct op_node_t
 {
-    std::unique_ptr<node> left;
-    std::unique_ptr<node> right;
+    ptr<node_t<ptr, vector, string>> left;
+    ptr<node_t<ptr, vector, string>> right;
     operation_type type;
 };
+
+using constant_node = constant_node_t<node_ptr_t, node_vector_t, node_string_t>;
+using symbol_node = symbol_node_t<node_ptr_t, node_vector_t, node_string_t>;
+using function_call_node = function_call_node_t<node_ptr_t, node_vector_t, node_string_t>;
+using op_node = op_node_t<node_ptr_t, node_vector_t, node_string_t>;
 
 template<typename T>
 concept node_type = []<typename... Ts>(std::variant<Ts...>) {
