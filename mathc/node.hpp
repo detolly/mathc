@@ -22,60 +22,37 @@ enum class operation_type
     exp
 };
 
-#define node_template \
-template<template<typename T> typename ptr, template<typename T> typename vector, typename string>
+struct op_node;
+struct constant_node;
+struct symbol_node;
+struct function_call_node;
 
-node_template struct op_node_t;
-node_template struct constant_node_t;
-node_template struct symbol_node_t;
-node_template struct function_call_node_t;
+using node = std::variant<op_node, constant_node, symbol_node, function_call_node>;
 
-node_template
-using node_t = std::variant<op_node_t<ptr, vector, string>,
-                            constant_node_t<ptr, vector, string>,
-                            symbol_node_t<ptr, vector, string>,
-                            function_call_node_t<ptr, vector, string>>;
-
-#define template_node_t node_t<ptr, vector, string>
-
-template<typename T> using node_ptr_t    = std::unique_ptr<T>;
-template<typename T> using node_vector_t = std::vector<T>;
-                     using node_string_t = std::string;
-
-#define runtime_node_template_arguments node_ptr_t, node_vector_t, node_string_t
-using node = node_t<runtime_node_template_arguments>;
-
-node_template struct constant_node_t
+struct constant_node
 {
     number value;
 };
 
-node_template struct symbol_node_t
+struct symbol_node
 {
-    string value;
+    std::string value;
 };
 
-node_template struct function_call_node_t
+struct function_call_node
 {
-    string function_name;
-    vector<template_node_t> arguments;
+    std::string function_name;
+    std::vector<node> arguments;
 };
 
-node_template struct op_node_t
+struct op_node
 {
-    ptr<template_node_t> left;
-    ptr<template_node_t> right;
+    std::unique_ptr<node> left;
+    std::unique_ptr<node> right;
     operation_type type;
 };
 
-using constant_node = constant_node_t<runtime_node_template_arguments>;
-using symbol_node = symbol_node_t<runtime_node_template_arguments>;
-using function_call_node = function_call_node_t<runtime_node_template_arguments>;
-using op_node = op_node_t<runtime_node_template_arguments>;
-
-
 // Utilities
-
 
 template<typename T>
 concept node_type = []<typename... Ts>(std::variant<Ts...>) {
