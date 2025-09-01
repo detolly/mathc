@@ -14,7 +14,7 @@ namespace mathc
 template<auto Pattern, auto rewriter>
 struct pattern_strategy
 {
-    constexpr void execute(node& n) const { rewrite<Pattern, rewriter>(n); }
+    constexpr bool execute(node& n) const { return rewrite<Pattern, rewriter>(n); }
 };
 
 #define p(a, b) pattern_strategy<a, b>{}
@@ -26,8 +26,12 @@ constexpr static auto strategies = std::array
 
 constexpr static void simplify(node& node, vm&)
 {
-    for(const auto& strategy : strategies)
-        strategy.execute(node);
+    bool did_rewrite = true;
+    while(did_rewrite) {
+        did_rewrite = false;
+        for(const auto& strategy : strategies)
+            did_rewrite = strategy.execute(node) || did_rewrite;
+    }
 }
 
 // test

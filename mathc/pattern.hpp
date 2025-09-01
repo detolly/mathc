@@ -321,28 +321,31 @@ constexpr inline bool pattern_impl<ce_node>::matches(const node& node, const aut
 
 template<auto Pattern, auto rewriter>
 struct extra_rewrites_t {
-    constexpr static void operator()(op_node& op)
+    constexpr static bool operator()(op_node& op)
     {
-        rewrite<Pattern, rewriter>(*op.left);
-        rewrite<Pattern, rewriter>(*op.right);
+        return rewrite<Pattern, rewriter>(*op.left) ||
+               rewrite<Pattern, rewriter>(*op.right);
     }
 
-    constexpr static void operator()(function_call_node& fn)
+    constexpr static bool operator()(function_call_node& fn)
     {
+        bool did_rewrite = false;
         for(auto& argument : fn.arguments)
-            rewrite<Pattern, rewriter>(argument);
+            did_rewrite = rewrite<Pattern, rewriter>(argument) || did_rewrite;
+
+        return did_rewrite;
     }
 
-    constexpr static void operator()(auto&) {}
+    constexpr static bool operator()(auto&) { return false; }
 };
 
 template<auto Pattern, auto rewriter>
-constexpr static inline void rewrite(node& node)
+constexpr static inline bool rewrite(node& node)
 {
     if (Pattern.matches(node, [&node](const auto& ctx) { node = std::move(rewriter(ctx)); }))
-        return;
+        return true;
 
-    std::visit(extra_rewrites_t<Pattern, rewriter>{}, node);
+    return std::visit(extra_rewrites_t<Pattern, rewriter>{}, node);
 }
 
 // test
