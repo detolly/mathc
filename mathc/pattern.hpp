@@ -162,7 +162,7 @@ struct pattern_impl
         return ce_op_node<n, pattern_impl<ce_const_value<right>{}>{}, operation_type::sub>{};
     }
 
-    template<auto right> consteval static auto pow()
+    template<auto right> consteval static auto exp()
         requires(number_t<decltype(right)>)
     { 
         return ce_op_node<n, pattern_impl<ce_const_value<right>{}>{}, operation_type::exp>{};
@@ -172,7 +172,7 @@ struct pattern_impl
     template<auto right> consteval static auto div() { return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::div>{}>{}; }
     template<auto right> consteval static auto add() { return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::add>{}>{}; }
     template<auto right> consteval static auto sub() { return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::sub>{}>{}; }
-    template<auto right> consteval static auto pow() { return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::exp>{}>{}; }
+    template<auto right> consteval static auto exp() { return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::exp>{}>{}; }
 
     constexpr static inline bool matches(const node&, const auto& callback);
     constexpr static inline bool matches(pattern_context&, const node&, const auto& callback);
@@ -342,7 +342,7 @@ struct extra_rewrites_t {
 template<auto Pattern, auto rewriter>
 constexpr static inline bool rewrite(node& node)
 {
-    if (Pattern.matches(node, [&node](const auto& ctx) { node = std::move(rewriter(ctx)); }))
+    if (Pattern.matches(node, [&node](const auto& ctx) { rewriter(ctx, node); }))
         return true;
 
     return std::visit(extra_rewrites_t<Pattern, rewriter>{}, node);

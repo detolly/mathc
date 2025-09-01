@@ -6,4 +6,5 @@
 -Wno-c++20-compat
 -Wno-switch-default
 -Wno-gnu-statement-expression
+-Wno-ctad-maybe-unsupported
 -I.
