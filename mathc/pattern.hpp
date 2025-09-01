@@ -93,12 +93,12 @@ struct pattern_context
     }
 
     template<fixed_string str>
-    constexpr node& get()
+    constexpr node&& get() const
     {
         constexpr static auto str_hash = hash(str.view());
         for(const auto& [_name_hash, _node_hash, node] : ctx)
             if (_name_hash == str_hash)
-                return node;
+                return std::move(node);
 
         std::unreachable();
     }
@@ -222,18 +222,21 @@ constexpr static struct
         if (op.type != type)
             return false;
 
+        if (!op.left || !op.right)
+            assert(false);
+
         pattern_context ctx2;
-        if (is_commutative(type))
+        if constexpr (is_commutative(type))
             ctx2 = auto{ ctx };
 
-        const auto normal_match = left.matches(ctx, *op.left) && right.matches(ctx, *op.right);
+        const auto normal_match = left.matches(ctx, *op.left, callback) && right.matches(ctx, *op.right, callback);
         if (normal_match) {
             callback(ctx);
             return true;
         }
 
-        if (is_commutative(type)) {
-            const auto commutative_match = left.matches(ctx2, *op.right) && right.matches(ctx2, *op.left);
+        if constexpr (is_commutative(type)) {
+            const auto commutative_match = left.matches(ctx2, *op.right, callback) && right.matches(ctx2, *op.left, callback);
             if (commutative_match) {
                 callback(ctx2);
                 return true;
@@ -287,7 +290,9 @@ constexpr static struct
 template<auto ce_node>
 constexpr bool pattern_impl<ce_node>::matches(pattern_context& ctx, const node& node, const auto& callback)
 {
-    return std::visit([&node, &ctx, &callback](const auto& _n){ return ce_matcher(ctx, node, ce_node, _n, callback); }, node);
+    return std::visit([&node, &ctx, &callback](const auto& actual_node) {
+        return ce_matcher(ctx, node, ce_node, actual_node, callback);
+    }, node);
 }
 
 template<auto ce_node>
@@ -296,6 +301,34 @@ constexpr inline bool pattern_impl<ce_node>::matches(const node& node, const aut
     pattern_context ctx;
     return matches(ctx, node, callback);
 }
+
+template<auto Pattern, auto rewriter>
+struct extra_rewrites_t {
+    constexpr static void operator()(op_node& op)
+    {
+        rewrite<Pattern, rewriter>(*op.left);
+        rewrite<Pattern, rewriter>(*op.right);
+    }
+
+    constexpr static void operator()(function_call_node& fn)
+    {
+        for(auto& argument : fn.arguments)
+            rewrite<Pattern, rewriter>(argument);
+    }
+
+    constexpr static void operator()(auto&) {}
+};
+
+template<auto Pattern, auto rewriter>
+constexpr static inline void rewrite(node& node)
+{
+    if (Pattern.matches(node, [&node](const auto& ctx) { node = std::move(rewriter(ctx)); }))
+        return;
+
+    std::visit(extra_rewrites_t<Pattern, rewriter>{}, node);
+}
+
+// test
 
 template<typename T>
 constexpr static inline bool pattern_test(const std::string_view source, const T&)
@@ -310,37 +343,6 @@ constexpr static inline bool pattern_test(const std::string_view source, const T
     return T::matches(node, [](const auto&){});
 }
 
-template<auto Pattern, auto rewriter>
-constexpr static inline void rewrite(node& node)
-{
-    struct {
-        mathc::node& node;
-
-        constexpr void operator()(op_node& op)
-        {
-            rewrite<Pattern, rewriter>(*op.left);
-            rewrite<Pattern, rewriter>(*op.right);
-        }
-
-        constexpr void operator()(function_call_node& fn)
-        {
-            for(auto& argument : fn.arguments)
-                rewrite<Pattern>(argument, rewriter);
-        }
-
-        constexpr void operator()(auto& op) {}
-    } extra_rewrites{ node };
-
-    if (Pattern.matches(node, [&node](const auto& ctx){
-        node = std::move(rewriter(ctx));
-        rewrite<Pattern, rewriter>(node);
-    })) {
-        return;
-    }
-
-    std::visit(extra_rewrites, node);
-}
-
 #ifndef NO_TEST
 static_assert(pattern_test("1", pattern::constant<1>()));
 static_assert(pattern_test("1+1", pattern::constant<1>().add<pattern::constant<1>()>()));
@@ -348,5 +350,4 @@ static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<2>()
 static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<5>()>())); // commutativity
 #endif
 
-// strategies
 }
