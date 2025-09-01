@@ -1,8 +1,5 @@
 #pragma once
 
-#include <utility>
-#include <variant>
-
 #include <common.hpp>
 #include <functions.hpp>
 #include <node.hpp>
@@ -14,94 +11,45 @@
 namespace mathc
 {
 
-constexpr static inline bool constant_fold(op_node& root_op)
+struct strategy
 {
-    const auto constant_move = [&root_op](auto& node_to_check, auto& other_node, auto& to_replace) {
-        if (!std::holds_alternative<constant_node>(*node_to_check))
-            return false;
+    constexpr static void rewrite(node&);
+};
 
-        if (std::holds_alternative<constant_node>(*to_replace) && is_associative(root_op.type))
-            std::swap(other_node, to_replace);
-        else
-            std::swap(node_to_check, to_replace);
+template<auto Pattern, auto rewriter>
+struct pattern_strategy
+{
+    constexpr static void rewrite(node& n) { rewrite<Pattern>(n, rewriter); }
+};
 
-        return true;
-    };
+#define p(a, b) pattern_strategy<a{}, b>{}
 
-    const auto fold = [&constant_move](auto& root_node_to_check, auto& to_replace, auto root_op_type){
-        if (!std::holds_alternative<op_node>(*root_node_to_check))
-            return false;
+constexpr static auto strategies = std::initializer_list<strategy>
+{
+    p(pattern::var<"x">().mul<pattern::constant<1>()>(), [](auto& ctx){ return ctx.get<"x">(); }), // x * 1 = x
+};
 
-        auto& checking_op = std::get<op_node>(*root_node_to_check);
-        if (checking_op.type != root_op_type)
-            return false;
-
-        bool did_move = constant_move(checking_op.left, checking_op.right, to_replace) ||
-                        constant_move(checking_op.right, checking_op.left, to_replace);
-
-        return did_move;
-    };
-
-    bool did_fold = fold(root_op.right, root_op.left, root_op.type) ||
-                    (is_commutative(root_op.type) && fold(root_op.left, root_op.right, root_op.type));
-
-    return did_fold;
+constexpr static void simplify(node& node, vm&)
+{
+    for(const auto& strategy : strategies)
+        strategy.rewrite(node);
 }
 
-constexpr inline void simplify(node& root_node, vm& vm)
+template<typename T>
+constexpr static inline bool simplify_test(const std::string_view source, const T&)
 {
-    const struct
-    {
-        node& root_node;
-        struct vm& vm;
+    const auto vec = lexer::lex(source);
+    assert(vec.size() > 0);
 
-        constexpr auto operator()(op_node& root_op) const
-        {
-            simplify(*root_op.left, vm);
-            simplify(*root_op.right, vm);
+    auto node_result = parser::parse(vec);
+    assert(node_result.has_value());
 
-            if (!std::holds_alternative<constant_node>(*root_op.left) ||
-                !std::holds_alternative<constant_node>(*root_op.right)) {
-                if (constant_fold(root_op))
-                    simplify(root_node, vm);
-                return;
-            }
-
-            const auto& left_result_number = std::get<constant_node>(*root_op.left).value;
-            const auto& right_result_number = std::get<constant_node>(*root_op.right).value;
-
-            root_node = operate(left_result_number, right_result_number, root_op.type);
-        }
-
-        constexpr auto operator()(constant_node&) const {}
-
-        constexpr auto operator()(symbol_node& symbol) const
-        {
-            auto symbol_node = vm.symbol_node(symbol.value);
-            if (!symbol_node.has_value())
-                return;
-
-            auto& n = symbol_node.value();
-            simplify(n, vm);
-            root_node = std::move(n);
-        }
-
-        constexpr auto operator()(function_call_node& function_call) const
-        {
-            const auto function = find_function(function_call.function_name);
-            if (!function.has_value())
-                return;
-
-            for(auto i = 0u; i < function_call.arguments.size(); i++)
-                simplify(function_call.arguments[i], vm);
-
-            auto result = function->func(function_call.arguments);
-            if (result.has_value())
-                root_node = std::move(result.value());
-        }
-    } simplify_visitor{ root_node, vm };
-
-    return std::visit(simplify_visitor, root_node);
+    auto& node = node_result.value();
+    vm vm;
+    simplify(node, vm);
+    return T::matches(node);
 }
+
+static_assert(simplify_test("4*1", pattern::constant<4>()));
 
 }
