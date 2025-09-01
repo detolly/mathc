@@ -13,20 +13,20 @@ namespace mathc
 
 struct strategy
 {
-    constexpr static void rewrite(node&);
+    constexpr void rewrite(node&) const;
 };
 
 template<auto Pattern, auto rewriter>
-struct pattern_strategy
+struct pattern_strategy : public strategy
 {
-    constexpr static void rewrite(node& n) { rewrite<Pattern>(n, rewriter); }
+    constexpr void rewrite(node& n) const { rewrite<Pattern, rewriter>(n); }
 };
 
-#define p(a, b) pattern_strategy<a{}, b>{}
+#define p(a, b) pattern_strategy<a, b>{}
 
 constexpr static auto strategies = std::initializer_list<strategy>
 {
-    p(pattern::var<"x">().mul<pattern::constant<1>()>(), [](auto& ctx){ return ctx.get<"x">(); }), // x * 1 = x
+    p(pattern::var<"x">().mul<pattern::constant<1>()>(), [](const auto& ctx){ return ctx.template get<"x">(); }), // x * 1 = x
 };
 
 constexpr static void simplify(node& node, vm&)
@@ -47,7 +47,7 @@ constexpr static inline bool simplify_test(const std::string_view source, const 
     auto& node = node_result.value();
     vm vm;
     simplify(node, vm);
-    return T::matches(node);
+    return T::matches(node, [](const auto&){});
 }
 
 static_assert(simplify_test("4*1", pattern::constant<4>()));
