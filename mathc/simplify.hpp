@@ -4,51 +4,15 @@
 #include <variant>
 
 #include <common.hpp>
-#include <print.hpp>
 #include <functions.hpp>
 #include <node.hpp>
 #include <number.hpp>
+#include <pattern.hpp>
+#include <print.hpp>
 #include <vm.hpp>
 
 namespace mathc
 {
-
-constexpr static inline node operate(const number& a, const number& b, operation_type type)
-{
-    switch(type) {
-        case operation_type::mul: return make_node<constant_node>(a * b);
-        case operation_type::div: return make_node<constant_node>(a / b);
-        case operation_type::add: return make_node<constant_node>(a + b);
-        case operation_type::sub: return make_node<constant_node>(a - b);
-        case operation_type::exp: return make_node<constant_node>(a ^ b);
-    }
-}
-
-constexpr static inline bool is_associative(operation_type type)
-{
-    switch(type) {
-        case mathc::operation_type::add:
-        case mathc::operation_type::mul:
-            return true;
-        case mathc::operation_type::sub:
-        case mathc::operation_type::exp:
-        case mathc::operation_type::div:
-            return false;
-    }
-}
-
-constexpr static inline bool is_commutative(operation_type type)
-{
-    switch(type) {
-        case mathc::operation_type::add:
-        case mathc::operation_type::mul:
-            return true;
-        case mathc::operation_type::sub:
-        case mathc::operation_type::exp:
-        case mathc::operation_type::div:
-            return false;
-    }
-}
 
 constexpr static inline bool constant_fold(op_node& root_op)
 {

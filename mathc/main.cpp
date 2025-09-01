@@ -1,7 +1,6 @@
 #include <cassert>
 #include <print>
 #include <string_view>
-#include <utility>
 #include <variant>
 
 #include <simplify.hpp>

@@ -97,10 +97,7 @@ constexpr static struct
                                   std::make_unique<node>(copy_node(*op.right)),
                                   op.type);
     }
-    constexpr static auto operator()(const function_call_node& op)
-    {
-        return copy_function_node(op);
-    }
+    constexpr static auto operator()(const function_call_node& op) { return copy_function_node(op); }
     constexpr static auto operator()(const symbol_node& op) { return make_node<symbol_node>(op); }
     constexpr static auto operator()(const constant_node& op) { return make_node<constant_node>(op); }
 } copy_visitor{};
@@ -123,4 +120,76 @@ constexpr static inline std::string_view operation_type_to_string_view(operation
     std::unreachable();
 }
 
+using hash_t = std::size_t;
+constexpr static std::uint32_t sleeve32 = 0x4D7192AE;
+constexpr static std::uint64_t sleeve64 = 0xA2D109FE4AB123E9;
+
+template<typename T> constexpr hash_t hash(const T&);
+
+template<>
+constexpr std::size_t hash<std::uint32_t>(const std::uint32_t& n) { return n ^ sleeve32; }
+template<>
+constexpr std::size_t hash<std::uint64_t>(const std::uint64_t& n) { return n ^ sleeve64; }
+template<>
+constexpr std::size_t hash<std::int64_t>(const std::int64_t& n) { return static_cast<std::uint64_t>( n); }
+template<>
+constexpr std::size_t hash<double>(const double& n) { return static_cast<std::uint64_t>(n); }
+template<>
+constexpr std::size_t hash<int>(const int& n) { return hash(static_cast<std::uint32_t>(n)); }
+template<>
+constexpr std::size_t hash<std::string_view>(const std::string_view& str)
+{
+    std::size_t hash = sleeve32;
+    for (char c : str) {
+        hash = ((hash << 5) ^ hash) ^ (static_cast<std::uint64_t>(c) * sleeve32);
+    }
+    return hash;
 }
+template<> constexpr std::size_t hash<node>(const node& n);
+
+constexpr static struct
+{
+    constexpr static std::size_t operator()(const op_node& op)
+    {
+        const auto left_hash = hash<node>(*op.left);
+        const auto right_hash = hash<node>(*op.right);
+
+        const auto underlying = std::to_underlying(op.type);
+        using underlying_t = std::remove_cv<decltype(underlying)>::type;
+        const auto op_hash = hash<underlying_t>(underlying);
+
+        const auto hash = left_hash ^ (right_hash ^ (op_hash << 4) + right_hash);
+        return static_cast<std::size_t>(hash);
+    }
+
+    constexpr static std::size_t operator()(const constant_node& c)
+    {
+        return std::visit([&c](const auto& n) {
+            return (hash(n) & 0xFFFFFFFE) | c.value.is_double();
+        }, c.value.impl);
+    }
+
+    constexpr static std::size_t operator()(const function_call_node& f)
+    {
+        std::size_t digest = hash(std::string_view{ f.function_name });
+        for(const auto& n : f.arguments) {
+            const auto h = hash(n);
+            digest = (digest ^ (h << 4)) + h;
+        }
+        return digest;
+    }
+
+    constexpr static std::size_t operator()(const symbol_node& sym)
+    {
+        return hash(std::string_view{ sym.value });
+    }
+} node_hasher;
+
+template<>
+constexpr std::size_t hash<node>(const node& n)
+{
+    return std::visit(node_hasher, n);
+}
+
+}
+
