@@ -11,13 +11,8 @@
 namespace mathc
 {
 
-struct strategy
-{
-    constexpr void rewrite(node&) const;
-};
-
 template<auto Pattern, auto rewriter>
-struct pattern_strategy : public strategy
+struct pattern_strategy
 {
     constexpr void execute(node& n) const { rewrite<Pattern, rewriter>(n); }
 };
@@ -45,7 +40,7 @@ constexpr static inline bool simplify_test(const std::string_view source,
     auto node_result = parser::parse(vec);
     assert(node_result.has_value());
     auto& node = node_result.value();
-
+    
     vm vm;
     simplify(node, vm);
 
@@ -58,6 +53,6 @@ constexpr static inline bool simplify_test(const std::string_view source,
     return hash(node2) == hash(node);
 }
 
-// static_assert(simplify_test("4*1", "4"));
+static_assert(simplify_test("4*1", "4"));
 
 }

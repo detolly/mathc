@@ -1,16 +1,31 @@
 #pragma once
 
+#include <utility>
+
 #include <fixed_string.hpp>
 #include <lexer.hpp>
 #include <node.hpp>
 #include <parser.hpp>
-#include <utility>
 
 namespace mathc
 {
 
 constexpr static inline node operate(const number& a, const number& b, operation_type type)
 {
+    switch(type) {
+        case operation_type::mul: return make_node<constant_node>(a * b);
+        case operation_type::div: return make_node<constant_node>(a / b);
+        case operation_type::add: return make_node<constant_node>(a + b);
+        case operation_type::sub: return make_node<constant_node>(a - b);
+        case operation_type::exp: return make_node<constant_node>(a ^ b);
+    }
+}
+
+constexpr static inline node operate(const node& a_node, const node& b_node, operation_type type)
+{
+    const auto& a = std::get<constant_node>(a_node).value;
+    const auto& b = std::get<constant_node>(b_node).value;
+
     switch(type) {
         case operation_type::mul: return make_node<constant_node>(a * b);
         case operation_type::div: return make_node<constant_node>(a / b);
@@ -222,21 +237,23 @@ constexpr static struct
         if (op.type != type)
             return false;
 
-        if (!op.left || !op.right)
-            assert(false);
+        assert(op.left.get());
+        assert(op.right.get());
 
         pattern_context ctx2;
         if constexpr (is_commutative(type))
             ctx2 = auto{ ctx };
 
-        const auto normal_match = left.matches(ctx, *op.left, callback) && right.matches(ctx, *op.right, callback);
+        const auto normal_match = left.matches(ctx, *op.left, [](const auto&){}) && 
+                                  right.matches(ctx, *op.right, [](const auto&){});
         if (normal_match) {
             callback(ctx);
             return true;
         }
 
         if constexpr (is_commutative(type)) {
-            const auto commutative_match = left.matches(ctx2, *op.right, callback) && right.matches(ctx2, *op.left, callback);
+            const auto commutative_match = left.matches(ctx2, *op.right, [](const auto&){}) &&
+                                           right.matches(ctx2, *op.left, [](const auto&){});
             if (commutative_match) {
                 callback(ctx2);
                 return true;
