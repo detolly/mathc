@@ -1,26 +1,15 @@
 #pragma once
 
-#include "print.hpp"
 #include <utility>
 
 #include <fixed_string.hpp>
 #include <lexer.hpp>
 #include <node.hpp>
 #include <parser.hpp>
+#include <print.hpp>
 
 namespace mathc
 {
-
-constexpr static inline node operate(const number& a, const number& b, operation_type type)
-{
-    switch(type) {
-        case operation_type::mul: return make_node<constant_node>(a * b);
-        case operation_type::div: return make_node<constant_node>(a / b);
-        case operation_type::add: return make_node<constant_node>(a + b);
-        case operation_type::sub: return make_node<constant_node>(a - b);
-        case operation_type::exp: return make_node<constant_node>(a ^ b);
-    }
-}
 
 constexpr static inline node operate(const node& a_node, const node& b_node, operation_type type)
 {
@@ -34,6 +23,8 @@ constexpr static inline node operate(const node& a_node, const node& b_node, ope
         case operation_type::sub: return make_node<constant_node>(a - b);
         case operation_type::exp: return make_node<constant_node>(a ^ b);
     }
+
+    std::unreachable();
 }
 
 constexpr static inline bool is_associative(operation_type type)
@@ -78,11 +69,12 @@ struct ce_const_var
     constexpr static size_t extent() { return 1; }
 };
 
-template<auto n>
+template<auto n, fixed_string _name>
 struct ce_const_value
 {
+    constexpr static auto name() { return _name; }
     constexpr static auto value() { return n; }
-    constexpr static size_t extent() { return 0; }
+    constexpr static size_t extent() { return 1; }
 };
 
 template<auto _left, auto _right, operation_type type, fixed_string _name>
@@ -140,9 +132,8 @@ struct pattern_context
         for (auto i = 0u; i < index; i++) {
             const auto& [_name_hash, _node_hash, node] = ctx[i];
 
-            // If node exists but not with the same name, or name exists but not with the same node.
-            if ((name_hash == _name_hash && node_hash != _node_hash) ||
-                (name_hash != _name_hash && node_hash == _node_hash))
+            // If name exists but not with the same node.
+            if (name_hash == _name_hash && node_hash != _node_hash)
                 return false;
         }
 
@@ -160,36 +151,6 @@ template<auto n>
 struct pattern_impl
 {
     constexpr static auto extent() { return n.extent(); }
-
-    template<auto right, fixed_string name = ""> consteval static auto mul()
-        requires(number_t<decltype(right)>)
-    {
-        return ce_op_node<n, pattern_impl<ce_const_value<right>{}>{}, operation_type::mul, name>{};
-    }
-
-    template<auto right, fixed_string name = ""> consteval static auto div()
-        requires(number_t<decltype(right)>)
-    {
-        return ce_op_node<n, pattern_impl<ce_const_value<right>{}>{}, operation_type::div, name>{};
-    }
-
-    template<auto right, fixed_string name = ""> consteval static auto add()
-        requires(number_t<decltype(right)>)
-    {
-        return ce_op_node<n, pattern_impl<ce_const_value<right>{}>{}, operation_type::add, name>{};
-    }
-
-    template<auto right, fixed_string name = ""> consteval static auto sub()
-        requires(number_t<decltype(right)>)
-    {
-        return ce_op_node<n, pattern_impl<ce_const_value<right>{}>{}, operation_type::sub, name>{};
-    }
-
-    template<auto right, fixed_string name = "sv"> consteval static auto exp()
-        requires(number_t<decltype(right)>)
-    { 
-        return ce_op_node<n, pattern_impl<ce_const_value<right>{}>{}, operation_type::exp, name>{};
-    }
 
     template<auto right, fixed_string name = ""> consteval static auto mul()
     {
@@ -227,39 +188,42 @@ struct pattern
     template<fixed_string s = "">
     constexpr static auto cvar() { return pattern_impl<ce_const_var<s>{}>{}; }
 
-    template<auto s>
-        requires(number_t<decltype(s)>)
-    constexpr static auto constant() { return pattern_impl<ce_const_value<s>{}>{}; }
+    template<auto n, fixed_string s = "">
+        requires(number_t<decltype(n)>)
+    constexpr static auto constant() { return pattern_impl<ce_const_value<n, s>{}>{}; }
 };
-
-template<auto str>
-constexpr static bool check_or_insert_pattern_context(auto& ctx,
-                                                      const node& n,
-                                                      const auto& node)
-{
-    constexpr static auto str_hash = hash(str.view());
-    const auto node_hash = node_hasher(node);
-
-    if (ctx.exists(str_hash, node_hash))
-        return true;
-
-    if (!ctx.can_be_inserted(str_hash, node_hash))
-        return false;
-
-    ctx.insert(str_hash, node_hasher(node), n);
-    return true;
-}
 
 constexpr static struct
 {
-    template<auto n>
-    constexpr static bool operator()(auto&,
-                                     const node&,
-                                     const ce_const_value<n>&,
+
+    template<auto str>
+    constexpr static bool check_or_insert_pattern_context(auto& ctx,
+                                                          const node& n,
+                                                          const auto& node)
+    {
+        constexpr static auto str_hash = hash(str.view());
+        const auto node_hash = node_hasher(node);
+
+        if (ctx.exists(str_hash, node_hash))
+            return true;
+
+        if (!ctx.can_be_inserted(str_hash, node_hash))
+            return false;
+
+        ctx.insert(str_hash, node_hasher(node), n);
+        return true;
+    }
+
+    template<auto n, fixed_string name>
+    constexpr static bool operator()(auto& ctx,
+                                     const node& _node,
+                                     const ce_const_value<n, name>&,
                                      const constant_node& constant)
     {
-        if (n == constant.value)
+        if (n == constant.value) {
+            ctx.insert(hash(name.view()), hash(_node), _node);
             return true;
+        }
 
         return false;
     }

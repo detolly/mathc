@@ -140,7 +140,7 @@ constexpr static struct
     constexpr static std::size_t operator()(const constant_node& c)
     {
         return std::visit([&c](const auto& n) {
-            return (hash(n) & 0xFFFFFFFE) | c.value.is_double();
+            return (hash(n) & 0xEFFFFFFF) | (static_cast<std::size_t>(c.value.is_double()) << 31);
         }, c.value.impl);
     }
 

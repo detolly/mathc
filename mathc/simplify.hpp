@@ -77,10 +77,7 @@ constexpr static auto strategies = patterns<
         move_in_hierarchy(get<"exp">(ctx), get<"op">(ctx));
     }>{},
 
-#define op(type)                                                           \
-    get<"op">(ctx) = operate(std::get<constant_node>(get<"a">(ctx)).value, \
-                             std::get<constant_node>(get<"b">(ctx)).value, \
-                             type);
+#define op(type) get<"op">(ctx) = operate(get<"a">(ctx), get<"b">(ctx), type);
 
     p<pattern::cvar<"a">().add<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::add) }>{},
     p<pattern::cvar<"a">().mul<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::mul) }>{},
@@ -112,7 +109,7 @@ constexpr static inline bool simplify_test(const std::string_view source,
     auto node_result = parser::parse(vec);
     assert(node_result.has_value());
     auto& node = node_result.value();
-    
+
     vm vm;
     simplify(node, vm);
 
@@ -129,8 +126,10 @@ constexpr static inline bool simplify_test(const std::string_view source,
 static_assert(simplify_test("a*a", "a^2"));
 static_assert(simplify_test("4+0", "4"));
 static_assert(simplify_test("4*1", "4"));
+static_assert(simplify_test("4*5", "20"));
 static_assert(simplify_test("1*4", "4"));
 static_assert(simplify_test("(a^y)*a", "a^(y+1)"));
+static_assert(simplify_test("1+1", "2"));
 #endif
 
 }
