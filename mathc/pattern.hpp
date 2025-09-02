@@ -137,11 +137,14 @@ struct pattern_context
 
     constexpr bool can_be_inserted(const hash_t name_hash, hash_t node_hash)
     {
-        for(const auto& [_name_hash, _node_hash, _] : ctx)
+        for (auto i = 0u; i < index; i++) {
+            const auto& [_name_hash, _node_hash, node] = ctx[i];
+
             // If node exists but not with the same name, or name exists but not with the same node.
             if ((name_hash == _name_hash && node_hash != _node_hash) ||
                 (name_hash != _name_hash && node_hash == _node_hash))
                 return false;
+        }
 
         return true;
     }
