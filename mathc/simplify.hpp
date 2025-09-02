@@ -54,6 +54,10 @@ constexpr static auto strategies = patterns<
     p<pattern::var<"x">().div<pattern::constant<1>(), "op">(), [](const auto& ctx) {
         move_in_hierarchy(get<"op">(ctx), get<"x">(ctx));
     }>{},
+    // x / x = 1
+    p<pattern::var<"x">().div<pattern::var<"x">(), "op">(), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
+    }>{},
     // x * 1 = x
     p<pattern::var<"x">().mul<pattern::constant<1>(), "op">(), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
@@ -66,6 +70,10 @@ constexpr static auto strategies = patterns<
     // 1 / (1 / x) = x
     p<pattern::constant<1>().div<pattern::constant<1>().div<pattern::var<"x">()>(), "op">(), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
+    // (1 / x) * x = 1
+    p<pattern::constant<1>().div<pattern::var<"x">()>().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
     }>{},
 
     // x * x = x^2
