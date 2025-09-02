@@ -33,30 +33,34 @@ struct patterns
 template<auto a, auto b>
 using p = pattern_strategy<a, b>;
 
+template<fixed_string name>
+constexpr static auto&& get(const auto& ctx) { return std::move(ctx.template get<name>()); }
+
+#define move_in_hierarchy(x, y)   \
+        do { node _x = node{ std::move(x) };   \
+        y = std::move(_x); } while(0)   \
+
 constexpr static auto strategies = patterns<
     // x + 0 = x
     p<pattern::var<"x">().add<pattern::constant<0>(), "op">(), [](const auto& ctx) {
-        node var = std::move(ctx.template get<"x">());
-        ctx.template get<"op">() = std::move(var);
+        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
     // x * 1 = x
     p<pattern::var<"x">().mul<pattern::constant<1>(), "op">(), [](const auto& ctx) {
-        node var = auto{ std::move(ctx.template get<"x">()) };
-        ctx.template get<"op">() = std::move(var);
+        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
     // x * x = x^2
     p<pattern::var<"x">().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
-        ctx.template get<"op">() = make_node<op_node>(std::make_unique<node>(std::move(ctx.template get<"x">())),
-                                                      make_unique_node<constant_node>(number::from_int(2)),
-                                                      operation_type::exp);
+        get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
+                                            make_unique_node<constant_node>(number::from_int(2)),
+                                            operation_type::exp);
     }>{},
     // (x^y)*x = x^(y+1)
-    p<pattern::var<"x">().exp<pattern::cvar<"y">(), "exp">().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
-        ctx.template get<"y">() = make_node<op_node>(std::make_unique<node>(std::move(ctx.template get<"y">())),
-                                                     make_unique_node<constant_node>(number::from_int(1)),
-                                                     operation_type::add);
-        auto x = auto{ std::move(ctx.template get<"exp">()) };
-        ctx.template get<"op">() = std::move(x);
+    p<pattern::var<"x">().exp<pattern::var<"y">(), "exp">().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
+        get<"y">(ctx) = make_node<op_node>(std::make_unique<node>(std::move(get<"y">(ctx))),
+                                           make_unique_node<constant_node>(number::from_int(1)),
+                                           operation_type::add);
+        move_in_hierarchy(get<"exp">(ctx), get<"op">(ctx));
     }>{}
 >{};
 
@@ -88,11 +92,11 @@ constexpr static inline bool simplify_test(const std::string_view source,
     return hash(node2) == hash(node);
 }
 
-#ifndef NO_TEST
+// #ifndef NO_TEST
 static_assert(simplify_test("a*a", "a^2"));
 static_assert(simplify_test("4+0", "4"));
 static_assert(simplify_test("4*1", "4"));
 static_assert(simplify_test("(a^y)*a", "a^(y+1)"));
-#endif
+// #endif
 
 }

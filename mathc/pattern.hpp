@@ -106,6 +106,11 @@ struct pattern_context
         index++;
     }
 
+    constexpr void pop()
+    {
+        index--;
+    }
+
     constexpr bool exists(hash_t name_hash, hash_t node_hash)
     {
         for(const auto& [_name_hash, _node_hash, _] : ctx)
@@ -270,22 +275,22 @@ constexpr static struct
 
         ctx.insert(hash(name.view()), hash(_node), _node);
 
-        auto ctx2 = auto{ ctx };
-
         const auto normal_match = left.matches(ctx, *op.left, [](const auto&){}) && 
                                   right.matches(ctx, *op.right, [](const auto&){});
         if (normal_match) {
             callback(ctx);
             return true;
         }
+        ctx.pop();
 
         if constexpr (is_commutative(type)) {
-            const auto commutative_match = left.matches(ctx2, *op.right, [](const auto&){}) &&
-                                           right.matches(ctx2, *op.left, [](const auto&){});
+            const auto commutative_match = left.matches(ctx, *op.right, [](const auto&){}) &&
+                                           right.matches(ctx, *op.left, [](const auto&){});
             if (commutative_match) {
-                callback(ctx2);
+                callback(ctx);
                 return true;
             }
+            ctx.pop();
         }
 
         return false;
@@ -296,16 +301,6 @@ constexpr static struct
                                      const node& node,
                                      const ce_const_var<s>&,
                                      const constant_node& actual_node,
-                                     const auto& callback)
-    {
-        return check_or_insert_pattern_context<s>(ctx, node, actual_node, callback);
-    }
-
-    template<auto s>
-    constexpr static bool operator()(auto& ctx,
-                                     const node& node,
-                                     const ce_const_var<s>&,
-                                     const symbol_node& actual_node,
                                      const auto& callback)
     {
         return check_or_insert_pattern_context<s>(ctx, node, actual_node, callback);
