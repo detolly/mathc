@@ -41,6 +41,10 @@ constexpr static auto&& get(const auto& ctx) { return std::move(ctx.template get
         y = std::move(_x); } while(0)   \
 
 constexpr static auto strategies = patterns<
+    // sqrt(x) * sqrt(x) = x
+    p<pattern::func<"sqrt", "", pattern::var<"x">()>().mul<pattern::func<"sqrt", "", pattern::var<"x">()>(), "op">(), [](const auto& ctx) {
+        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
 
     // x + 0 = x
     p<pattern::var<"x">().add<pattern::constant<0>(), "op">(), [](const auto& ctx) {
@@ -144,6 +148,7 @@ static_assert(simplify_test("1*4", "4"));
 static_assert(simplify_test("1/(1/x)", "x"));
 static_assert(simplify_test("(a^y)*a", "a^(y+1)"));
 static_assert(simplify_test("1+1", "2"));
+static_assert(simplify_test("sqrt(x)*sqrt(x)", "x"));
 #endif
 
 }

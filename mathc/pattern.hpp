@@ -88,6 +88,15 @@ struct ce_op_node
     constexpr static size_t extent() { return 1 + _right.extent() + _left.extent(); }
 };
 
+template<fixed_string _function_name, fixed_string _name, auto... args>
+struct ce_func_node
+{
+    constexpr static auto function_name() { return _function_name; }
+    constexpr static auto name() { return _name; }
+
+    constexpr static size_t extent() { return 1 + (args.extent() + ...); }
+};
+
 template<size_t extent>
 struct pattern_context
 {
@@ -182,15 +191,18 @@ struct pattern_impl
 
 struct pattern
 {
-    template<fixed_string s = "">
-    constexpr static auto var() { return pattern_impl<ce_any_node<s>{}>{}; }
+    template<fixed_string name = "">
+    constexpr static auto var() { return pattern_impl<ce_any_node<name>{}>{}; }
 
-    template<fixed_string s = "">
-    constexpr static auto cvar() { return pattern_impl<ce_const_var<s>{}>{}; }
+    template<fixed_string name = "">
+    constexpr static auto cvar() { return pattern_impl<ce_const_var<name>{}>{}; }
 
-    template<auto n, fixed_string s = "">
-        requires(number_t<decltype(n)>)
-    constexpr static auto constant() { return pattern_impl<ce_const_value<n, s>{}>{}; }
+    template<auto number, fixed_string s = "">
+        requires(number_t<decltype(number)>)
+    constexpr static auto constant() { return pattern_impl<ce_const_value<number, s>{}>{}; }
+
+    template<fixed_string function_name, fixed_string name, auto... args>
+    constexpr static auto func() { return pattern_impl<ce_func_node<function_name, name, args...>{}>{}; }
 };
 
 constexpr static struct
@@ -254,6 +266,35 @@ constexpr static struct
 
         ctx.index = original_index;
         return false;
+    }
+
+    template<auto arg, auto... args>
+    constexpr static bool check_argument(auto& ctx, const auto& arguments, size_t i = 0u)
+    {
+        if constexpr (sizeof...(args) > 0)
+            return arg.matches(ctx, arguments[i]) && check_argument<args...>(ctx, arguments, i + 1);
+
+        return arg.matches(ctx, arguments[i]);
+    }
+
+    template<auto fn_name, auto name, auto... args>
+    constexpr static bool operator()(auto& ctx,
+                                     const node& node,
+                                     const ce_func_node<fn_name, name, args...>&,
+                                     const function_call_node& actual_node)
+    {
+        if (actual_node.arguments.size() != sizeof...(args))
+            return false;
+
+        if (fn_name.view() != actual_node.function_name)
+            return false;
+
+        const auto arguments_match = check_argument<args...>(ctx, actual_node.arguments);
+        if (!arguments_match)
+            return false;
+
+        ctx.insert(hash(fn_name.view()), node_hasher(actual_node), node);
+        return true;
     }
 
     template<auto s>
@@ -347,6 +388,7 @@ static_assert(pattern_test("1", pattern::cvar()));
 static_assert(pattern_test("1+1", pattern::constant<1>().add<pattern::constant<1>()>()));
 static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<2>()>()));
 static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<5>()>())); // commutativity
+static_assert(pattern_test("sqrt(2)", pattern::func<"sqrt", "", pattern::cvar()>()));
 #endif
 
 }
