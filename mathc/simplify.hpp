@@ -63,6 +63,11 @@ constexpr static auto strategies = patterns<
         get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
     }>{},
 
+    // 1 / (1 / x) = x
+    p<pattern::constant<1>().div<pattern::constant<1>().div<pattern::var<"x">()>(), "op">(), [](const auto& ctx) {
+        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
+
     // x * x = x^2
     p<pattern::var<"x">().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
         get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
@@ -128,6 +133,7 @@ static_assert(simplify_test("4+0", "4"));
 static_assert(simplify_test("4*1", "4"));
 static_assert(simplify_test("4*5", "20"));
 static_assert(simplify_test("1*4", "4"));
+static_assert(simplify_test("1/(1/x)", "x"));
 static_assert(simplify_test("(a^y)*a", "a^(y+1)"));
 static_assert(simplify_test("1+1", "2"));
 #endif
