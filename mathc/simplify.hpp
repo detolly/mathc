@@ -41,14 +41,28 @@ constexpr static auto&& get(const auto& ctx) { return std::move(ctx.template get
         y = std::move(_x); } while(0)   \
 
 constexpr static auto strategies = patterns<
+
     // x + 0 = x
     p<pattern::var<"x">().add<pattern::constant<0>(), "op">(), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
+    // x - 0 = x
+    p<pattern::var<"x">().sub<pattern::constant<0>(), "op">(), [](const auto& ctx) {
+        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
+    // x / 1 = x
+    p<pattern::var<"x">().div<pattern::constant<1>(), "op">(), [](const auto& ctx) {
+        move_in_hierarchy(get<"op">(ctx), get<"x">(ctx));
     }>{},
     // x * 1 = x
     p<pattern::var<"x">().mul<pattern::constant<1>(), "op">(), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
+    // x * 0 = 0
+    p<pattern::var<"x">().mul<pattern::constant<0>(), "op">(), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
+    }>{},
+
     // x * x = x^2
     p<pattern::var<"x">().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
         get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
@@ -61,12 +75,31 @@ constexpr static auto strategies = patterns<
                                            make_unique_node<constant_node>(number::from_int(1)),
                                            operation_type::add);
         move_in_hierarchy(get<"exp">(ctx), get<"op">(ctx));
-    }>{}
+    }>{},
+
+#define op(type)                                                           \
+    get<"op">(ctx) = operate(std::get<constant_node>(get<"a">(ctx)).value, \
+                             std::get<constant_node>(get<"b">(ctx)).value, \
+                             type);
+
+    p<pattern::cvar<"a">().add<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::add) }>{},
+    p<pattern::cvar<"a">().mul<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::mul) }>{},
+    p<pattern::cvar<"a">().div<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::div) }>{},
+    p<pattern::cvar<"a">().sub<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::sub) }>{},
+    p<pattern::cvar<"a">().exp<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::exp) }>{}
+
+#undef op
 >{};
+
 
 constexpr static void simplify(node& node, vm&)
 {
-    while(strategies.execute(node)) {}
+    while(strategies.execute(node)) {
+        if !consteval {
+            print_tree(node);
+            std::puts("");
+        }
+    }
 }
 
 // test
@@ -92,11 +125,12 @@ constexpr static inline bool simplify_test(const std::string_view source,
     return hash(node2) == hash(node);
 }
 
-// #ifndef NO_TEST
+#ifndef NO_TEST
 static_assert(simplify_test("a*a", "a^2"));
 static_assert(simplify_test("4+0", "4"));
 static_assert(simplify_test("4*1", "4"));
+static_assert(simplify_test("1*4", "4"));
 static_assert(simplify_test("(a^y)*a", "a^(y+1)"));
-// #endif
+#endif
 
 }

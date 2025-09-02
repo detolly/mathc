@@ -1,5 +1,6 @@
 #pragma once
 
+#include "print.hpp"
 #include <utility>
 
 #include <fixed_string.hpp>
@@ -102,32 +103,34 @@ struct pattern_context
 
     constexpr void insert(hash_t name_hash, hash_t node_hash, const node& node)
     {
+        if (name_hash == hash(""sv))
+            return;
+
         ctx[index] = { name_hash, node_hash, &node };
         index++;
     }
 
-    constexpr void pop()
-    {
-        index--;
-    }
-
     constexpr bool exists(hash_t name_hash, hash_t node_hash)
     {
-        for(const auto& [_name_hash, _node_hash, _] : ctx)
+        for (auto i = 0u; i < index; i++) {
+            const auto& [_name_hash, _node_hash, node] = ctx[i];
             if (name_hash == _name_hash && node_hash == _node_hash)
                 return true;
+        }
 
         return false;
     }
 
     template<fixed_string str>
-    constexpr node&& get() const
+    constexpr node& get() const
     {
         constexpr static auto str_hash = hash(str.view());
 
-        for(const auto& [_name_hash, _node_hash, node] : ctx)
+        for (auto i = 0u; i < index; i++) {
+            const auto& [_name_hash, _node_hash, node] = ctx[i];
             if (_name_hash == str_hash)
-                return std::move(const_cast<mathc::node&>(*node));
+                return const_cast<mathc::node&>(*node);
+        }
 
         std::unreachable();
     }
@@ -210,8 +213,7 @@ struct pattern_impl
         return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::exp, name>{}>{};
     }
 
-    constexpr static inline bool matches(const node&, const auto& callback);
-    constexpr static inline bool matches(auto& ctx, const node&, const auto& callback);
+    constexpr static inline bool matches(auto& ctx, const node&);
 };
 
 struct pattern
@@ -230,8 +232,7 @@ struct pattern
 template<auto str>
 constexpr static bool check_or_insert_pattern_context(auto& ctx,
                                                       const node& n,
-                                                      const auto& node,
-                                                      const auto& callback)
+                                                      const auto& node)
 {
     constexpr static auto str_hash = hash(str.view());
     const auto node_hash = node_hasher(node);
@@ -243,23 +244,20 @@ constexpr static bool check_or_insert_pattern_context(auto& ctx,
         return false;
 
     ctx.insert(str_hash, node_hasher(node), n);
-    callback(ctx);
     return true;
 }
 
 constexpr static struct
 {
     template<auto n>
-    constexpr static bool operator()(auto& ctx,
+    constexpr static bool operator()(auto&,
                                      const node&,
                                      const ce_const_value<n>&,
-                                     const constant_node& constant,
-                                     const auto& callback)
+                                     const constant_node& constant)
     {
-        if (n == constant.value) {
-            callback(ctx);
+        if (n == constant.value)
             return true;
-        }
+
         return false;
     }
 
@@ -267,32 +265,27 @@ constexpr static struct
     constexpr static bool operator()(auto& ctx,
                                      const node& _node,
                                      const ce_op_node<left, right, type, name>&,
-                                     const op_node& op,
-                                     const auto& callback)
+                                     const op_node& op)
     {
         if (op.type != type)
             return false;
 
-        ctx.insert(hash(name.view()), hash(_node), _node);
-
-        const auto normal_match = left.matches(ctx, *op.left, [](const auto&){}) && 
-                                  right.matches(ctx, *op.right, [](const auto&){});
-        if (normal_match) {
-            callback(ctx);
+        auto original_index = ctx.index;
+        if (left.matches(ctx, *op.left) && right.matches(ctx, *op.right)) {
+            ctx.insert(hash(name.view()), hash(_node), _node);
             return true;
         }
-        ctx.pop();
 
-        if constexpr (is_commutative(type)) {
-            const auto commutative_match = left.matches(ctx, *op.right, [](const auto&){}) &&
-                                           right.matches(ctx, *op.left, [](const auto&){});
-            if (commutative_match) {
-                callback(ctx);
-                return true;
-            }
-            ctx.pop();
+        ctx.index = original_index;
+        if constexpr (!is_commutative(type))
+            return false;
+
+        if (left.matches(ctx, *op.right) && right.matches(ctx, *op.left)) {
+            ctx.insert(hash(name.view()), hash(_node), _node);
+            return true;
         }
 
+        ctx.index = original_index;
         return false;
     }
 
@@ -300,25 +293,22 @@ constexpr static struct
     constexpr static bool operator()(auto& ctx,
                                      const node& node,
                                      const ce_const_var<s>&,
-                                     const constant_node& actual_node,
-                                     const auto& callback)
+                                     const constant_node& actual_node)
     {
-        return check_or_insert_pattern_context<s>(ctx, node, actual_node, callback);
+        return check_or_insert_pattern_context<s>(ctx, node, actual_node);
     }
 
     template<auto s>
     constexpr static bool operator()(auto& ctx,
                                      const node& node,
                                      const ce_any_node<s>&,
-                                     const auto& actual_node,
-                                     const auto& callback)
+                                     const auto& actual_node)
     {
-        return check_or_insert_pattern_context<s>(ctx, node, actual_node, callback);
+        return check_or_insert_pattern_context<s>(ctx, node, actual_node);
     }
 
     constexpr static bool operator()(auto&,
                                      const node&,
-                                     const auto&,
                                      const auto&,
                                      const auto&)
     {
@@ -328,26 +318,20 @@ constexpr static struct
 } ce_matcher;
 
 template<auto ce_node>
-constexpr bool pattern_impl<ce_node>::matches(auto& ctx, const node& node, const auto& callback)
+constexpr bool pattern_impl<ce_node>::matches(auto& ctx, const node& node)
 {
-    return std::visit([&node, &ctx, &callback](const auto& actual_node) {
-        return ce_matcher(ctx, node, ce_node, actual_node, callback);
+    return std::visit([&node, &ctx](const auto& actual_node) {
+        return ce_matcher(ctx, node, ce_node, actual_node);
     }, node);
-}
-
-template<auto ce_node>
-constexpr inline bool pattern_impl<ce_node>::matches(const node& node, const auto& callback)
-{
-    pattern_context<ce_node.extent()> ctx;
-    return matches(ctx, node, callback);
 }
 
 template<auto Pattern, auto rewriter>
 struct extra_rewrites_t {
     constexpr static bool operator()(op_node& op)
     {
-        return rewrite<Pattern, rewriter>(*op.left) ||
-               rewrite<Pattern, rewriter>(*op.right);
+        const auto a = rewrite<Pattern, rewriter>(*op.left);
+        const auto b = rewrite<Pattern, rewriter>(*op.right);
+        return a || b;
     }
 
     constexpr static bool operator()(function_call_node& fn)
@@ -365,8 +349,11 @@ struct extra_rewrites_t {
 template<auto Pattern, auto rewriter>
 constexpr static inline bool rewrite(node& node)
 {
-    if (Pattern.matches(node, [](const auto& ctx) { rewriter(ctx); }))
+    pattern_context<Pattern.extent()> ctx;
+    if (Pattern.matches(ctx, node)) {
+        rewriter(ctx);
         return true;
+    }
 
     return std::visit(extra_rewrites_t<Pattern, rewriter>{}, node);
 }
@@ -382,12 +369,14 @@ constexpr static inline bool pattern_test(const std::string_view source, const T
     const auto node_result = parser::parse(vec);
     assert(node_result.has_value());
 
+    pattern_context<T::extent()> ctx;
     const auto& node = node_result.value();
-    return T::matches(node, [](const auto&){});
+    return T::matches(ctx, node);
 }
 
 #ifndef NO_TEST
 static_assert(pattern_test("1", pattern::constant<1>()));
+static_assert(pattern_test("1", pattern::cvar()));
 static_assert(pattern_test("1+1", pattern::constant<1>().add<pattern::constant<1>()>()));
 static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<2>()>()));
 static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<5>()>())); // commutativity
