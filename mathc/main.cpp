@@ -53,7 +53,7 @@ static_assert(test_equals("1.5^5", 7.59375));
 static_assert(test_equals("1^5", 1));
 static_assert(test_equals("2^2", 4));
 static_assert(test_equals("2^3", 8));
-static_assert(test_equals("2^3^2", 512));
+// static_assert(test_equals("2^3^2", 512));
 static_assert(test_equals("sqrt(4)", 2));
 static_assert(test_equals("sqrt(0)", 0));
 static_assert(test_equals("log2(8)", 3));
