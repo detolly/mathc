@@ -63,6 +63,13 @@ struct ce_any_node
 };
 
 template<fixed_string s>
+struct ce_symbol_node
+{
+    constexpr static auto name() { return s; }
+    constexpr static size_t extent() { return 1; }
+};
+
+template<fixed_string s>
 struct ce_const_var
 {
     constexpr static auto name() { return s; }
@@ -192,7 +199,10 @@ struct pattern_impl
 struct pattern
 {
     template<fixed_string name = "">
-    constexpr static auto var() { return pattern_impl<ce_any_node<name>{}>{}; }
+    constexpr static auto any() { return pattern_impl<ce_any_node<name>{}>{}; }
+
+    template<fixed_string name = "">
+    constexpr static auto var() { return pattern_impl<ce_symbol_node<name>{}>{}; }
 
     template<fixed_string name = "">
     constexpr static auto cvar() { return pattern_impl<ce_const_var<name>{}>{}; }
@@ -312,6 +322,15 @@ constexpr static struct
     template<auto s>
     constexpr static bool operator()(auto& ctx,
                                      const node& node,
+                                     const ce_symbol_node<s>&,
+                                     const symbol_node& actual_node)
+    {
+        return check_or_insert_pattern_context<s>(ctx, node, actual_node);
+    }
+
+    template<auto s>
+    constexpr static bool operator()(auto& ctx,
+                                     const node& node,
                                      const ce_any_node<s>&,
                                      const auto& actual_node)
     {
@@ -388,10 +407,11 @@ constexpr static inline bool pattern_test(const std::string_view source, const T
 #ifndef NO_TEST
 static_assert(pattern_test("1", pattern::constant<1>()));
 static_assert(pattern_test("1", pattern::cvar()));
-static_assert(pattern_test("1+1", pattern::constant<1>().add<pattern::constant<1>()>()));
-static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<2>()>()));
-static_assert(pattern_test("5*2", pattern::var<"x">().mul<pattern::constant<5>()>())); // commutativity
-static_assert(pattern_test("sqrt(2)", pattern::func<"sqrt", "", pattern::cvar()>()));
+static_assert(pattern_test("1+1", pattern::constant<1>().add(pattern::constant<1>())));
+static_assert(pattern_test("5*2", pattern::any<"x">().mul(pattern::constant<2>())));
+static_assert(pattern_test("5*2", pattern::any<"x">().mul(pattern::constant<5>()))); // commutativity
+static_assert(pattern_test("sqrt(2)", pattern::func<"sqrt">(pattern::cvar())));
+static_assert(pattern_test("x", pattern::var()));
 #endif
 
 }
