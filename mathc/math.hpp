@@ -9,10 +9,24 @@
 #include <number.hpp>
 #undef NO_NUMBER_IMPL
 
-namespace math
+namespace mathc::math
 {
 
-using namespace mathc;
+constexpr static auto functions =
+{
+    "sqrt"sv,
+    "log2"sv,
+    "ln"sv,
+};
+
+constexpr static inline bool has_function(const std::string_view func)
+{
+    for (const auto& fn : functions)
+        if (fn == func)
+            return true;
+
+    return false;
+}
 
 namespace detail
 {
@@ -83,7 +97,7 @@ constexpr static inline double pow(const double base, const double exponent)
 
 constexpr static inline number sqrt(const double num)
 {
-    if (!std::is_constant_evaluated())
+    if constexpr (!std::is_constant_evaluated())
         return number{ std::sqrt(num) };
 
     if (num < 0)
@@ -102,7 +116,7 @@ constexpr static inline number sqrt(const std::int64_t num)
 
 constexpr static inline number pow(const double base, const double exp)
 {
-    if (!std::is_constant_evaluated())
+    if constexpr (!std::is_constant_evaluated())
         return number{ std::pow(base, exp) };
 
     return number{ detail::pow(base, exp) };
@@ -120,9 +134,9 @@ constexpr static inline number pow(const std::int64_t base, const std::int64_t e
     return number{ ret };
 }
 
-constexpr static inline number log(double num)
+constexpr static inline number ln(double num)
 {
-    if (!std::is_constant_evaluated())
+    if constexpr (!std::is_constant_evaluated())
         return number{ std::log(num) };
 
     return number{ detail::ln_newton(num, num, 0.0) };
@@ -130,7 +144,7 @@ constexpr static inline number log(double num)
 
 constexpr static inline number log2(double num)
 {
-    if (!std::is_constant_evaluated())
+    if constexpr (!std::is_constant_evaluated())
         return number{ std::log2(num) };
 
     return number{ detail::ln_newton(num, num, 0.0) / detail::ln_newton(2.0, 2.0, 0.0) };

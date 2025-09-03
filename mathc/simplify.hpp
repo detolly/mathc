@@ -1,7 +1,6 @@
 #pragma once
 
 #include <common.hpp>
-#include <functions.hpp>
 #include <node.hpp>
 #include <number.hpp>
 #include <pattern.hpp>
@@ -36,16 +35,11 @@ using p = pattern_strategy<a, b>;
 template<fixed_string name>
 constexpr static auto&& get(const auto& ctx) { return std::move(ctx.template get<name>()); }
 
-#define move_in_hierarchy(x, y)   \
-        do { node _x = node{ std::move(x) };   \
-        y = std::move(_x); } while(0)   \
+#define move_in_hierarchy(x, y)                 \
+        do { node _x = node{ std::move(x) };    \
+        y = std::move(_x); } while(0)
 
 constexpr static auto strategies = patterns<
-    // sqrt(x) * sqrt(x) = x
-    p<pattern::func<"sqrt", "", pattern::var<"x">()>().mul<pattern::func<"sqrt", "", pattern::var<"x">()>(), "op">(), [](const auto& ctx) {
-        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
-    }>{},
-
     // x + 0 = x
     p<pattern::var<"x">().add<pattern::constant<0>(), "op">(), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
@@ -94,6 +88,23 @@ constexpr static auto strategies = patterns<
         move_in_hierarchy(get<"exp">(ctx), get<"op">(ctx));
     }>{},
 
+    // sqrt(x)^2 = x
+    p<pattern::func<"sqrt", "", pattern::var<"x">()>().exp<pattern::constant<2>(), "op">(), [](const auto& ctx) {
+        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
+
+    // function invocations
+    p<pattern::func<"sqrt", "fn", pattern::cvar<"x">()>(), [](const auto& ctx) {
+        get<"fn">(ctx) = make_node<constant_node>(math::sqrt(std::get<constant_node>(get<"x">(ctx)).value.to_double()));
+    }>{},
+    p<pattern::func<"log2", "fn", pattern::cvar<"x">()>(), [](const auto& ctx) {
+        get<"fn">(ctx) = make_node<constant_node>(math::log2(std::get<constant_node>(get<"x">(ctx)).value.to_double()));
+    }>{},
+    p<pattern::func<"ln", "fn", pattern::cvar<"x">()>(), [](const auto& ctx) {
+        get<"fn">(ctx) = make_node<constant_node>(math::ln(std::get<constant_node>(get<"x">(ctx)).value.to_double()));
+    }>{},
+
+    // operations
 #define op(type) get<"op">(ctx) = operate(get<"a">(ctx), get<"b">(ctx), type);
 
     p<pattern::cvar<"a">().add<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::add) }>{},

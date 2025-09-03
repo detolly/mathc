@@ -293,7 +293,7 @@ constexpr static struct
         if (!arguments_match)
             return false;
 
-        ctx.insert(hash(fn_name.view()), node_hasher(actual_node), node);
+        ctx.insert(hash(name.view()), node_hasher(actual_node), node);
         return true;
     }
 

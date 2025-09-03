@@ -24,7 +24,7 @@ struct number
     constexpr inline std::int64_t as_int() const { return std::get<std::int64_t>(impl); }
     constexpr inline double as_double() const { return std::get<double>(impl); }
 
-    constexpr inline auto promote_to_double() const
+    constexpr inline auto to_double() const
     {
         return std::visit([](const auto num){ return static_cast<double>(num); }, impl);
     }

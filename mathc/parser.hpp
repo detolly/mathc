@@ -7,7 +7,6 @@
 #include <utility>
 
 #include <common.hpp>
-#include <functions.hpp>
 #include <node.hpp>
 #include <token.hpp>
 
@@ -227,7 +226,7 @@ constexpr inline parse_result parser::parse_var()
         PROPAGATE_ERROR(symbol, parse_symbol());
         const auto& value = std::get<symbol_node>(symbol).value;
 
-        if (const auto function = find_function(value); function.has_value()) {
+        if (math::has_function(value)) {
             PROPAGATE_ERROR(function_call, parse_function_call(value));
             return function_call_result;
         }
