@@ -41,47 +41,47 @@ constexpr static auto&& get(const auto& ctx) { return std::move(ctx.template get
 
 constexpr static auto strategies = patterns<
     // x + 0 = x
-    p<pattern::var<"x">().add<pattern::constant<0>(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().add<"op">(pattern::constant<0>()), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
     // x - 0 = x
-    p<pattern::var<"x">().sub<pattern::constant<0>(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().sub<"op">(pattern::constant<0>()), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
     // x / 1 = x
-    p<pattern::var<"x">().div<pattern::constant<1>(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().div<"op">(pattern::constant<1>()), [](const auto& ctx) {
         move_in_hierarchy(get<"op">(ctx), get<"x">(ctx));
     }>{},
     // x / x = 1
-    p<pattern::var<"x">().div<pattern::var<"x">(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().div<"op">(pattern::var<"x">()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
     }>{},
     // x * 1 = x
-    p<pattern::var<"x">().mul<pattern::constant<1>(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().mul<"op">(pattern::constant<1>()), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
     // x * 0 = 0
-    p<pattern::var<"x">().mul<pattern::constant<0>(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().mul<"op">(pattern::constant<0>()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
     }>{},
 
     // 1 / (1 / x) = x
-    p<pattern::constant<1>().div<pattern::constant<1>().div<pattern::var<"x">()>(), "op">(), [](const auto& ctx) {
+    p<pattern::constant<1>().div<"op">(pattern::constant<1>().div(pattern::var<"x">())), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
     // (1 / x) * x = 1
-    p<pattern::constant<1>().div<pattern::var<"x">()>().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
+    p<pattern::constant<1>().div(pattern::var<"x">()).mul<"op">(pattern::var<"x">()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
     }>{},
 
     // x * x = x^2
-    p<pattern::var<"x">().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().mul<"op">(pattern::var<"x">()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
                                             make_unique_node<constant_node>(number::from_int(2)),
                                             operation_type::exp);
     }>{},
     // (x^y)*x = x^(y+1)
-    p<pattern::var<"x">().exp<pattern::var<"y">(), "exp">().mul<pattern::var<"x">(), "op">(), [](const auto& ctx) {
+    p<pattern::var<"x">().exp<"exp">(pattern::var<"y">()).mul<"op">(pattern::var<"x">()), [](const auto& ctx) {
         get<"y">(ctx) = make_node<op_node>(std::make_unique<node>(std::move(get<"y">(ctx))),
                                            make_unique_node<constant_node>(number::from_int(1)),
                                            operation_type::add);
@@ -89,31 +89,39 @@ constexpr static auto strategies = patterns<
     }>{},
 
     // sqrt(x)^2 = x
-    p<pattern::func<"sqrt", "", pattern::var<"x">()>().exp<pattern::constant<2>(), "op">(), [](const auto& ctx) {
+    p<pattern::func<"sqrt">(pattern::var<"x">()).exp<"op">(pattern::constant<2>()), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
 
     // function invocations
-    p<pattern::func<"sqrt", "fn", pattern::cvar<"x">()>(), [](const auto& ctx) {
+    p<pattern::func<"sqrt", "fn">(pattern::cvar<"x">()), [](const auto& ctx) {
         get<"fn">(ctx) = make_node<constant_node>(math::sqrt(std::get<constant_node>(get<"x">(ctx)).value.to_double()));
     }>{},
-    p<pattern::func<"log2", "fn", pattern::cvar<"x">()>(), [](const auto& ctx) {
+    p<pattern::func<"log2", "fn">(pattern::cvar<"x">()), [](const auto& ctx) {
         get<"fn">(ctx) = make_node<constant_node>(math::log2(std::get<constant_node>(get<"x">(ctx)).value.to_double()));
     }>{},
-    p<pattern::func<"ln", "fn", pattern::cvar<"x">()>(), [](const auto& ctx) {
+    p<pattern::func<"ln", "fn">(pattern::cvar<"x">()), [](const auto& ctx) {
         get<"fn">(ctx) = make_node<constant_node>(math::ln(std::get<constant_node>(get<"x">(ctx)).value.to_double()));
     }>{},
 
     // operations
 #define op(type) get<"op">(ctx) = operate(get<"a">(ctx), get<"b">(ctx), type);
 
-    p<pattern::cvar<"a">().add<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::add) }>{},
-    p<pattern::cvar<"a">().mul<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::mul) }>{},
-    p<pattern::cvar<"a">().div<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::div) }>{},
-    p<pattern::cvar<"a">().sub<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::sub) }>{},
-    p<pattern::cvar<"a">().exp<pattern::cvar<"b">(), "op">(), [](const auto& ctx){ op(operation_type::exp) }>{}
+    p<pattern::cvar<"a">().add<"op">(pattern::cvar<"b">()), [](const auto& ctx) { op(operation_type::add) }>{},
+    p<pattern::cvar<"a">().mul<"op">(pattern::cvar<"b">()), [](const auto& ctx) { op(operation_type::mul) }>{},
+    p<pattern::cvar<"a">().div<"op">(pattern::cvar<"b">()), [](const auto& ctx) { op(operation_type::div) }>{},
+    p<pattern::cvar<"a">().sub<"op">(pattern::cvar<"b">()), [](const auto& ctx) { op(operation_type::sub) }>{},
+    p<pattern::cvar<"a">().exp<"op">(pattern::cvar<"b">()), [](const auto& ctx) { op(operation_type::exp) }>{}
 
 #undef op
+
+    //distribute
+    // c * (x+y)
+    // p<pattern::cvar<"c">().mul<"mul">(pattern::op<operation_type::add, "op">(pattern::var<"x">(), pattern::var<"y">())), [](const auto& ctx) {
+    //
+    //     return;
+    // }>{},
+    
 >{};
 
 

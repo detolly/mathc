@@ -161,29 +161,29 @@ struct pattern_impl
 {
     constexpr static auto extent() { return n.extent(); }
 
-    template<auto right, fixed_string name = ""> consteval static auto mul()
+    template<fixed_string name = "", typename T> consteval static auto mul(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::mul, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::mul, name>{}>{};
     }
 
-    template<auto right, fixed_string name = ""> consteval static auto div()
+    template<fixed_string name = "", typename T> consteval static auto div(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::div, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::div, name>{}>{};
     }
 
-    template<auto right, fixed_string name = ""> consteval static auto add()
+    template<fixed_string name = "", typename T> consteval static auto add(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::add, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::add, name>{}>{};
     }
 
-    template<auto right, fixed_string name = ""> consteval static auto sub()
+    template<fixed_string name = "", typename T> consteval static auto sub(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::sub, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::sub, name>{}>{};
     }
 
-    template<auto right, fixed_string name = ""> consteval static auto exp()
+    template<fixed_string name = "", typename T> consteval static auto exp(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, right, operation_type::exp, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::exp, name>{}>{};
     }
 
     constexpr static inline bool matches(auto& ctx, const node&);
@@ -201,8 +201,11 @@ struct pattern
         requires(number_t<decltype(number)>)
     constexpr static auto constant() { return pattern_impl<ce_const_value<number, s>{}>{}; }
 
-    template<fixed_string function_name, fixed_string name, auto... args>
-    constexpr static auto func() { return pattern_impl<ce_func_node<function_name, name, args...>{}>{}; }
+    template<fixed_string function_name, fixed_string name = "", typename... Args>
+    constexpr static auto func(const Args&...) { return pattern_impl<ce_func_node<function_name, name, Args{}...>{}>{}; }
+
+    template<operation_type type, fixed_string s = "", typename Left, typename Right>
+    constexpr static auto op(const Left&, const Right&) { return pattern_impl<ce_op_node<Left{}, Right{}, type, s>{}>{}; }
 };
 
 constexpr static struct
