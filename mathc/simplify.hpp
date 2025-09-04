@@ -290,12 +290,12 @@ static_assert(simplify_test("a*10", "10*a"));
 static_assert(simplify_test("x^0", "1"));
 static_assert(simplify_test("x^1", "x"));
 
-static_assert(simplify_test("0/1", "0")); // Zero numerator
-static_assert(simplify_test("-a*-a", "a^2")); // Negative terms multiplication
-static_assert(simplify_test("x^(-1)", "1/x")); // Negative exponent
-static_assert(simplify_test("(a^0)^0", "1")); // Zero exponent edge case
-static_assert(simplify_test("-0", "0")); // Negative zero
-static_assert(simplify_test("(a/b)/(a/b)", "1")); // Division of identical fractions
+static_assert(simplify_test("0/1", "0"));
+static_assert(simplify_test("-a*-a", "a^2"));
+static_assert(simplify_test("x^(-1)", "1/x"));
+static_assert(simplify_test("(a^0)^0", "1"));
+static_assert(simplify_test("-0", "0"));
+static_assert(simplify_test("(a/b)/(a/b)", "1"));
 #endif
 
 }
