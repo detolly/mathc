@@ -102,6 +102,10 @@ constexpr static auto strategies = patterns<
     p<pattern::any<"x">().mul<"op">(pattern::constant<0>()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
     }>{},
+    // x / 0 = nan
+    p<pattern::any<"x">().div<"op">(pattern::constant<0>()), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_double(static_cast<double>(NAN)));
+    }>{},
     // x ^ 0 = 1
     p<pattern::any<"x">().exp<"op">(pattern::constant<0>()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
@@ -116,11 +120,10 @@ constexpr static auto strategies = patterns<
         get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
     }>{},
 
-    // 0 ^ 0 = 1
-    p<pattern::constant<0>().exp<"op">(pattern::constant<0>()), [](const auto& ctx) {
-        get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
+    // 0 ^ -1 = NaN
+    p<pattern::constant<0>().exp<"op">(pattern::constant<-1>()), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_double(static_cast<double>(NAN)));
     }>{},
-    // FIXME: 0^-1 is undefined.
     // 0 ^ c = 0 
     p<pattern::constant<0>().exp<"op">(pattern::cvar()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
