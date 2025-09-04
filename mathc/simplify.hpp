@@ -19,6 +19,8 @@ struct pattern_strategy
     }
 };
 
+// FIXME: change order of looping over patterns and nodes. more cahce friendly to do nodes then patterns.
+
 template<pattern_strategy strategy, pattern_strategy... strategies>
 struct patterns
 {
@@ -36,15 +38,17 @@ template<auto a, auto b, bool should_match_commutative = true>
 using p = pattern_strategy<a, b, should_match_commutative>;
 
 template<fixed_string name>
-constexpr static auto&& get(const auto& ctx) { return std::move(ctx.template get<name>()); }
+constexpr static auto& get(const auto& ctx) { return ctx.template get<name>(); }
 
 #define move_in_hierarchy(x, y)                 \
         do { node _x = node{ std::move(x) };    \
         y = std::move(_x); } while(0)
 
+// TODO: Expand -> Reorder -> Simplify is probably a better strategy.
+
 // FIXME: most if not all of these strategies shouldn't have to malloc.
 constexpr static auto strategies = patterns<
-    // NOTE: shuffle
+    // NOTE: Reorder
 
     // var * c = c * var
     p<pattern::var<"x">().mul<"mul1">(pattern::cvar<"c">()), [](const auto& ctx) {
@@ -54,12 +58,12 @@ constexpr static auto strategies = patterns<
 
     // c * (c2*x) = (c * c2) * x
     p<pattern::cvar<"c">().mul<"mul1">(pattern::op<operation_type::mul, "mul2">(pattern::cvar<"c2">(), pattern::var<"x">())), [](const auto& ctx) {
-        auto op2 = make_unique_node<op_node>(std::make_unique<node>(get<"c">(ctx)),
-                                             std::make_unique<node>(get<"c2">(ctx)),
+        auto op2 = make_unique_node<op_node>(std::make_unique<node>(std::move(get<"c">(ctx))),
+                                             std::make_unique<node>(std::move(get<"c2">(ctx))),
                                              operation_type::mul);
 
         get<"mul1">(ctx) = make_node<op_node>(std::move(op2),
-                                              std::make_unique<node>(get<"x">(ctx)),
+                                              std::make_unique<node>(std::move(get<"x">(ctx))),
                                               operation_type::mul);
     }>{},
 
@@ -75,21 +79,20 @@ constexpr static auto strategies = patterns<
     }>{},
     // x / 1 = x
     p<pattern::any<"x">().div<"op">(pattern::constant<1>()), [](const auto& ctx) {
-        move_in_hierarchy(get<"op">(ctx), get<"x">(ctx));
-    }>{},
-    // c / -1 = -x
-    p<pattern::cvar<"x">().div<"op">(pattern::constant<-1>()), [](const auto& ctx) {
-        std::get<constant_node>(get<"x">(ctx)).value = std::get<constant_node>(get<"x">(ctx)).value * number::from_int(-1);
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
+    // x / -1 = -1 * x
+    p<pattern::any<"x">().div<"op">(pattern::constant<-1>()), [](const auto& ctx) {
+        std::get<op_node>(get<"op">(ctx)).type = operation_type::mul;
     }>{},
     // x * 1 = x
     p<pattern::any<"x">().mul<"op">(pattern::constant<1>()), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
-    // x * -1 = -x
-    p<pattern::cvar<"x">().mul<"op">(pattern::constant<-1>()), [](const auto& ctx) {
-        std::get<constant_node>(get<"x">(ctx)).value = std::get<constant_node>(get<"x">(ctx)).value * number::from_int(-1);
-        move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    // c * -1 = -c
+    p<pattern::cvar<"c">().mul<"op">(pattern::constant<-1>()), [](const auto& ctx) {
+        std::get<constant_node>(get<"c">(ctx)).value = std::get<constant_node>(get<"c">(ctx)).value * number::from_int(-1);
+        move_in_hierarchy(get<"c">(ctx), get<"op">(ctx));
     }>{},
     // x / x = 1
     p<pattern::any<"x">().div<"op">(pattern::any<"x">()), [](const auto& ctx) {
@@ -107,11 +110,26 @@ constexpr static auto strategies = patterns<
     p<pattern::any<"x">().exp<"op">(pattern::constant<1>()), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
     }>{},
-    // 0 ^ x = 0
-    p<pattern::constant<0>().exp<"op">(pattern::any()), [](const auto& ctx) {
+
+    // -1 * -1 = 1
+    p<pattern::constant<-1>().mul<"op">(pattern::constant<-1>()), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
+    }>{},
+
+    // 0 ^ 0 = 1
+    p<pattern::constant<0>().exp<"op">(pattern::constant<0>()), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_int(1));
+    }>{},
+    // FIXME: 0^-1 is undefined.
+    // 0 ^ c = 0 
+    p<pattern::constant<0>().exp<"op">(pattern::cvar()), [](const auto& ctx) {
         get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
     }>{},
 
+    // 0 / x = 0
+    p<pattern::constant<0>().div<"op">(pattern::any()), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
+    }>{},
     // 1 / (1 / x) = x
     p<pattern::constant<1>().div<"op">(pattern::constant<1>().div(pattern::any<"x">())), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
@@ -122,12 +140,12 @@ constexpr static auto strategies = patterns<
     }>{},
     // (x / y) * (z / w) = (x * z) / (y * w)
     p<pattern::any<"x">().div(pattern::any<"y">()).mul<"op">(pattern::any<"z">().div(pattern::any<"w">())), [](const auto& ctx) {
-        auto first_mul = make_unique_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
-                                                   std::make_unique<node>(get<"z">(ctx)),
+        auto first_mul = make_unique_node<op_node>(std::make_unique<node>(std::move(get<"x">(ctx))),
+                                                   std::make_unique<node>(std::move(get<"z">(ctx))),
                                                    operation_type::mul);
 
-        auto second_mul = make_unique_node<op_node>(std::make_unique<node>(get<"y">(ctx)),
-                                                    std::make_unique<node>(get<"w">(ctx)),
+        auto second_mul = make_unique_node<op_node>(std::make_unique<node>(std::move(get<"y">(ctx))),
+                                                    std::make_unique<node>(std::move(get<"w">(ctx))),
                                                     operation_type::mul);
 
         get<"op">(ctx) = make_node<op_node>(std::move(first_mul),
@@ -136,28 +154,28 @@ constexpr static auto strategies = patterns<
     }>{},
     // (x / y) + (z / y) = (x + z) / (y)
     p<pattern::any<"x">().div(pattern::any<"y">()).add<"op">(pattern::any<"z">().div(pattern::any<"y">())), [](const auto& ctx) {
-        auto add_op = make_unique_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
-                                                std::make_unique<node>(get<"z">(ctx)),
+        auto add_op = make_unique_node<op_node>(std::make_unique<node>(std::move(get<"x">(ctx))),
+                                                std::make_unique<node>(std::move(get<"z">(ctx))),
                                                 operation_type::add);
 
         get<"op">(ctx) = make_node<op_node>(std::move(add_op),
-                                            std::make_unique<node>(get<"y">(ctx)),
+                                            std::make_unique<node>(std::move(get<"y">(ctx))),
                                             operation_type::div);
     }>{},
 
     // (x^y) * (x^z) = x^(y+z)
     p<pattern::any<"x">().exp(pattern::any<"y">()).mul<"op">(pattern::any<"x">().exp(pattern::any<"z">())), [](const auto& ctx) {
-        auto op2 = make_unique_node<op_node>(std::make_unique<node>(get<"y">(ctx)),
-                                             std::make_unique<node>(get<"z">(ctx)),
+        auto op2 = make_unique_node<op_node>(std::make_unique<node>(std::move(get<"y">(ctx))),
+                                             std::make_unique<node>(std::move(get<"z">(ctx))),
                                              operation_type::add);
 
-        get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
+        get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(std::move(get<"x">(ctx))),
                                             std::move(op2),
                                             operation_type::exp);
     }>{},
     // x * x = x^2
     p<pattern::var<"x">().mul<"op">(pattern::var<"x">()), [](const auto& ctx) {
-        get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(get<"x">(ctx)),
+        get<"op">(ctx) = make_node<op_node>(std::make_unique<node>(std::move(get<"x">(ctx))),
                                             make_unique_node<constant_node>(number::from_int(2)),
                                             operation_type::exp);
     }>{},
@@ -214,7 +232,7 @@ constexpr static auto strategies = patterns<
                                          std::make_unique<node>(std::move(*add_op.left)),
                                          operation_type::mul);
 
-        *add_op.right = make_node<op_node>(std::make_unique<node>(get<"c">(ctx)),
+        *add_op.right = make_node<op_node>(std::make_unique<node>(std::move(get<"c">(ctx))),
                                            std::make_unique<node>(std::move(*add_op.right)),
                                            operation_type::mul);
 
@@ -271,6 +289,13 @@ static_assert(simplify_test("5*(2*a)", "10*a"));
 static_assert(simplify_test("a*10", "10*a"));
 static_assert(simplify_test("x^0", "1"));
 static_assert(simplify_test("x^1", "x"));
+
+static_assert(simplify_test("0/1", "0")); // Zero numerator
+static_assert(simplify_test("-a*-a", "a^2")); // Negative terms multiplication
+static_assert(simplify_test("x^(-1)", "1/x")); // Negative exponent
+static_assert(simplify_test("(a^0)^0", "1")); // Zero exponent edge case
+static_assert(simplify_test("-0", "0")); // Negative zero
+static_assert(simplify_test("(a/b)/(a/b)", "1")); // Division of identical fractions
 #endif
 
 }
