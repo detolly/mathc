@@ -42,7 +42,7 @@ constexpr static auto&& get(const auto& ctx) { return std::move(ctx.template get
         do { node _x = node{ std::move(x) };    \
         y = std::move(_x); } while(0)
 
-// FIXME: most if not all of these strategies don't have to malloc.
+// FIXME: most if not all of these strategies shouldn't have to malloc.
 constexpr static auto strategies = patterns<
     // NOTE: shuffle
 
@@ -106,6 +106,10 @@ constexpr static auto strategies = patterns<
     // x ^ 1 = x
     p<pattern::any<"x">().exp<"op">(pattern::constant<1>()), [](const auto& ctx) {
         move_in_hierarchy(get<"x">(ctx), get<"op">(ctx));
+    }>{},
+    // 0 ^ x = 0
+    p<pattern::constant<0>().exp<"op">(pattern::any()), [](const auto& ctx) {
+        get<"op">(ctx) = make_node<constant_node>(number::from_int(0));
     }>{},
 
     // 1 / (1 / x) = x
