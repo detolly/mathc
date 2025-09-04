@@ -27,19 +27,6 @@ constexpr static inline node operate(const node& a_node, const node& b_node, ope
     std::unreachable();
 }
 
-constexpr static inline bool is_associative(operation_type type)
-{
-    switch(type) {
-        case mathc::operation_type::add:
-        case mathc::operation_type::mul:
-            return true;
-        case mathc::operation_type::sub:
-        case mathc::operation_type::exp:
-        case mathc::operation_type::div:
-            return false;
-    }
-}
-
 constexpr static inline bool is_commutative(operation_type type)
 {
     switch(type) {
@@ -193,6 +180,7 @@ struct pattern_impl
         return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::exp, name>{}>{};
     }
 
+    template<bool should_match_commutative>
     constexpr static inline bool matches(auto& ctx, const node&);
 };
 
@@ -218,7 +206,8 @@ struct pattern
     constexpr static auto op(const Left&, const Right&) { return pattern_impl<ce_op_node<Left{}, Right{}, type, s>{}>{}; }
 };
 
-constexpr static struct
+template<bool should_match_commutative>
+struct ce_matcher
 {
 
     template<auto str>
@@ -263,16 +252,16 @@ constexpr static struct
             return false;
 
         auto original_index = ctx.index;
-        if (left.matches(ctx, *op.left) && right.matches(ctx, *op.right)) {
+        if (left.template matches<should_match_commutative>(ctx, *op.left) && right.template matches<should_match_commutative>(ctx, *op.right)) {
             ctx.insert(hash(name.view()), hash(_node), _node);
             return true;
         }
 
         ctx.index = original_index;
-        if constexpr (!is_commutative(type))
+        if constexpr (!should_match_commutative || !is_commutative(type))
             return false;
 
-        if (left.matches(ctx, *op.right) && right.matches(ctx, *op.left)) {
+        if (left.template matches<should_match_commutative>(ctx, *op.right) && right.template matches<should_match_commutative>(ctx, *op.left)) {
             ctx.insert(hash(name.view()), hash(_node), _node);
             return true;
         }
@@ -285,9 +274,10 @@ constexpr static struct
     constexpr static bool check_argument(auto& ctx, const auto& arguments, size_t i = 0u)
     {
         if constexpr (sizeof...(args) > 0)
-            return arg.matches(ctx, arguments[i]) && check_argument<args...>(ctx, arguments, i + 1);
+            return arg.template matches<should_match_commutative>(ctx, arguments[i]) &&
+                   check_argument<args...>(ctx, arguments, i + 1);
 
-        return arg.matches(ctx, arguments[i]);
+        return arg.template matches<should_match_commutative>(ctx, arguments[i]);
     }
 
     template<auto fn_name, auto name, auto... args>
@@ -345,47 +335,48 @@ constexpr static struct
         return false;
     }
 
-} ce_matcher;
+};
 
 template<auto ce_node>
-constexpr bool pattern_impl<ce_node>::matches(auto& ctx, const node& node)
+template<bool should_match_commutative>
+constexpr inline bool pattern_impl<ce_node>::matches(auto& ctx, const node& node)
 {
     return std::visit([&node, &ctx](const auto& actual_node) {
-        return ce_matcher(ctx, node, ce_node, actual_node);
+        return ce_matcher<should_match_commutative>{}(ctx, node, ce_node, actual_node);
     }, node);
 }
 
-template<auto Pattern, auto rewriter>
+template<auto Pattern, auto rewriter, bool should_match_commutative>
 struct extra_rewrites_t {
-    constexpr static bool operator()(op_node& op)
+    constexpr static inline bool operator()(op_node& op)
     {
-        const auto a = rewrite<Pattern, rewriter>(*op.left);
-        const auto b = rewrite<Pattern, rewriter>(*op.right);
+        const auto a = rewrite<Pattern, rewriter, should_match_commutative>(*op.left);
+        const auto b = rewrite<Pattern, rewriter, should_match_commutative>(*op.right);
         return a || b;
     }
 
-    constexpr static bool operator()(function_call_node& fn)
+    constexpr static inline bool operator()(function_call_node& fn)
     {
         bool did_rewrite = false;
         for(auto& argument : fn.arguments)
-            did_rewrite = rewrite<Pattern, rewriter>(argument) || did_rewrite;
+            did_rewrite = rewrite<Pattern, rewriter, should_match_commutative>(argument) || did_rewrite;
 
         return did_rewrite;
     }
 
-    constexpr static bool operator()(auto&) { return false; }
+    constexpr static inline bool operator()(auto&) { return false; }
 };
 
-template<auto Pattern, auto rewriter>
+template<auto Pattern, auto rewriter, bool should_match_commutative>
 constexpr static inline bool rewrite(node& node)
 {
     pattern_context<Pattern.extent()> ctx;
-    if (Pattern.matches(ctx, node)) {
+    if (Pattern.template matches<should_match_commutative>(ctx, node)) {
         rewriter(ctx);
         return true;
     }
 
-    return std::visit(extra_rewrites_t<Pattern, rewriter>{}, node);
+    return std::visit(extra_rewrites_t<Pattern, rewriter, should_match_commutative>{}, node);
 }
 
 // test
@@ -401,7 +392,7 @@ constexpr static inline bool pattern_test(const std::string_view source, const T
 
     pattern_context<T::extent()> ctx;
     const auto& node = node_result.value();
-    return T::matches(ctx, node);
+    return T::template matches<true>(ctx, node);
 }
 
 #ifndef NO_TEST
