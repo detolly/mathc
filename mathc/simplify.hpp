@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <common.hpp>
 #include <node.hpp>
 #include <number.hpp>
@@ -10,27 +11,124 @@
 namespace mathc
 {
 
-template<auto Pattern, auto rewriter, bool should_match_commutative>
+template<auto _pattern, auto rewriter, bool should_match_commutative>
 struct pattern_strategy
 {
-    constexpr bool execute(node& node) const
+    constexpr static bool try_rewrite(node& node)
     {
-        return rewrite<Pattern, rewriter, should_match_commutative>(node);
+        pattern_context<_pattern.extent()> ctx;
+        if (_pattern.template matches<should_match_commutative>(ctx, node)) {
+            rewriter(ctx);
+            return true;
+        }
+
+        return false;
     }
 };
 
-// FIXME: change order of looping over patterns and nodes. more cahce friendly to do nodes then patterns.
+// NOTE: Top down
 
-template<pattern_strategy strategy, pattern_strategy... strategies>
+template<pattern_strategy strategy>
+constexpr static bool top_down_rewrite(node& node);
+
+template<pattern_strategy strategy>
+struct top_down_rewriter
+{
+    constexpr inline bool operator()(op_node& op)
+    {
+        const bool did_rewrite = top_down_rewrite<strategy>(*op.left) ||
+                                 top_down_rewrite<strategy>(*op.right);
+
+        return did_rewrite;
+    }
+
+    constexpr inline bool operator()(function_call_node& fn)
+    {
+        for(auto& argument : fn.arguments)
+            if (top_down_rewrite<strategy>(argument))
+                return true;
+
+        return false;
+    }
+
+    constexpr inline bool operator()(auto&) { return false; }
+};
+
+template<pattern_strategy strategy>
+constexpr static bool top_down_rewrite(node& node)
+{
+    if (strategy.try_rewrite(node))
+        return true;
+
+    return std::visit(top_down_rewriter<strategy>{}, node);
+}
+
+template<pattern_strategy strategy>
+constexpr static bool top_down_rewrite_loop(node& node)
+{
+    bool did_rewrite = false;
+    while(top_down_rewrite<strategy>(node)) {
+        if !consteval {
+            print_tree(node);
+            std::puts("");
+        }
+        did_rewrite = true;
+    }
+
+    return did_rewrite;
+}
+
+// NOTE: Bottom up
+
+template<pattern_strategy strategy>
+constexpr static bool bottom_up_rewrite(node& node);
+
+template<pattern_strategy strategy>
+struct bottom_up_rewriter
+{
+    constexpr inline bool operator()(op_node& op)
+    {
+        const bool a = bottom_up_rewrite<strategy>(*op.left);
+        const bool b = bottom_up_rewrite<strategy>(*op.right);
+        return a || b;
+    }
+
+    constexpr inline bool operator()(function_call_node& fn)
+    {
+        bool did_rewrite = false;
+        for(auto& argument : fn.arguments)
+            did_rewrite = bottom_up_rewrite<strategy>(argument) || did_rewrite;
+        return did_rewrite;
+    }
+
+    constexpr inline bool operator()(auto&) { return false; }
+};
+
+template<pattern_strategy strategy>
+constexpr static bool bottom_up_rewrite(node& node)
+{
+    const auto did_rewrite = std::visit(bottom_up_rewriter<strategy>{}, node);
+    return strategy.try_rewrite(node) || did_rewrite;
+}
+
+template<pattern_strategy... strategies>
 struct patterns
 {
-    constexpr static bool execute(node& n)
+    constexpr static void top_down_rewrite(node& node)
     {
-        bool did_rewrite;
-        if constexpr (sizeof...(strategies) > 0) did_rewrite = strategy.execute(n) ||
-                                                               patterns<strategies...>::execute(n);
-        else did_rewrite = strategy.execute(n);
-        return did_rewrite;
+        if ((top_down_rewrite_loop<strategies>(node) || ...))
+            top_down_rewrite(node);
+    }
+
+    constexpr static void bottom_up_rewrite(node& node)
+    {
+        if ((bottom_up_rewrite<strategies>(node) || ...)) {
+            if !consteval {
+                print_tree(node);
+                std::puts("");
+            }
+            bottom_up_rewrite(node);
+        }
     }
 };
 
@@ -247,12 +345,7 @@ constexpr static auto strategies = patterns<
 
 constexpr static void simplify(node& node, vm&)
 {
-    while(strategies.execute(node)) {
-        if !consteval {
-            print_tree(node);
-            std::puts("");
-        }
-    }
+    strategies.bottom_up_rewrite(node);
 }
 
 // test

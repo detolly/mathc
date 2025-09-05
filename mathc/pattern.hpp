@@ -346,39 +346,6 @@ constexpr inline bool pattern_impl<ce_node>::matches(auto& ctx, const node& node
     }, node);
 }
 
-template<auto Pattern, auto rewriter, bool should_match_commutative>
-struct extra_rewrites_t {
-    constexpr static inline bool operator()(op_node& op)
-    {
-        const auto a = rewrite<Pattern, rewriter, should_match_commutative>(*op.left);
-        const auto b = rewrite<Pattern, rewriter, should_match_commutative>(*op.right);
-        return a || b;
-    }
-
-    constexpr static inline bool operator()(function_call_node& fn)
-    {
-        bool did_rewrite = false;
-        for(auto& argument : fn.arguments)
-            did_rewrite = rewrite<Pattern, rewriter, should_match_commutative>(argument) || did_rewrite;
-
-        return did_rewrite;
-    }
-
-    constexpr static inline bool operator()(auto&) { return false; }
-};
-
-template<auto Pattern, auto rewriter, bool should_match_commutative>
-constexpr static inline bool rewrite(node& node)
-{
-    pattern_context<Pattern.extent()> ctx;
-    if (Pattern.template matches<should_match_commutative>(ctx, node)) {
-        rewriter(ctx);
-        return true;
-    }
-
-    return std::visit(extra_rewrites_t<Pattern, rewriter, should_match_commutative>{}, node);
-}
-
 // test
 
 template<typename T>
