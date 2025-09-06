@@ -24,7 +24,7 @@ constexpr static auto& get(const auto& ctx) { return ctx.template get<name>(); }
 // TODO: Expand -> Reorder -> Simplify is probably a better strategy.
 
 // FIXME: most if not all of these strategies shouldn't have to malloc.
-constexpr static auto strategies = patterns<
+constexpr static auto simplify_rewriter = rewriter<
     // NOTE: Reorder
 
     // var * c = c * var
@@ -227,7 +227,7 @@ constexpr static auto strategies = patterns<
 
 constexpr static void simplify(node& node, vm&)
 {
-    strategies.top_down_rewrite(node);
+    simplify_rewriter.top_down_rewrite(node);
 }
 
 // test

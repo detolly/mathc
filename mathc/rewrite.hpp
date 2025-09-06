@@ -60,7 +60,7 @@ constexpr static bool _bottom_up_rewrite(pattern_rewriter_fn_t fn, node& node)
 }
 
 template<pattern_strategy... strategies>
-struct patterns
+struct rewriter
 {
     constexpr static void top_down_rewrite(node& node)
     {
