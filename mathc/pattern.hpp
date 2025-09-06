@@ -45,40 +45,54 @@ constexpr static inline bool is_commutative(operation_type type)
 template<fixed_string s>
 struct ce_any_node
 {
-    constexpr static size_t extent() { return 1; }
+    constexpr static std::size_t extent() { return 1; }
 };
 
 template<fixed_string s>
 struct ce_symbol_node
 {
-    constexpr static size_t extent() { return 1; }
+    constexpr static std::size_t extent() { return 1; }
 };
 
 template<fixed_string s>
 struct ce_const_var
 {
-    constexpr static size_t extent() { return 1; }
+    constexpr static std::size_t extent() { return 1; }
 };
 
 template<auto n, fixed_string _name>
 struct ce_const_value
 {
-    constexpr static size_t extent() { return 1; }
+    constexpr static std::size_t extent() { return 1; }
 };
 
 template<auto _left, auto _right, operation_type type, fixed_string _name, bool should_match_commutative>
 struct ce_op_node
 {
-    constexpr static size_t extent() { return 1 + _right.extent() + _left.extent(); }
+    constexpr static std::size_t extent() { return 1 + _right.extent() + _left.extent(); }
 };
 
 template<fixed_string _function_name, fixed_string _name, auto... args>
 struct ce_func_node
 {
-    constexpr static size_t extent() { return 1 + (args.extent() + ...); }
+    constexpr static std::size_t extent() { return 1 + (args.extent() + ...); }
 };
 
-template<size_t extent>
+template<fixed_string _name, typename... Ts>
+    requires((node_type<Ts> && ...))
+struct ce_any_of_node
+{
+    constexpr static std::size_t extent() { return 1; }
+};
+
+template<fixed_string _name, typename... Ts>
+    requires((node_type<Ts> && ...))
+struct ce_none_of_node
+{
+    constexpr static std::size_t extent() { return 1; }
+};
+
+template<std::size_t extent>
 struct pattern_context
 {
     using entry = std::tuple<hash_t, hash_t, const node*>;
@@ -131,7 +145,7 @@ struct pattern_context
     }
 
     std::array<entry, extent> ctx;
-    size_t index{ 0 };
+    std::size_t index{ 0 };
 };
 
 template<typename T>
@@ -142,27 +156,32 @@ struct pattern_impl
 {
     constexpr static auto extent() { return n.extent(); }
 
-    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto mul(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T>
+    consteval static auto mul(const T&)
     {
         return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::mul, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto div(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T>
+    consteval static auto div(const T&)
     {
         return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::div, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto add(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T>
+    consteval static auto add(const T&)
     {
         return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::add, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto sub(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T>
+    consteval static auto sub(const T&)
     {
         return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::sub, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto exp(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T>
+    consteval static auto exp(const T&)
     {
         return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::exp, name, should_match_commutative>{}>{};
     }
@@ -174,6 +193,12 @@ struct pattern
 {
     template<fixed_string name = "">
     constexpr static auto any() { return pattern_impl<ce_any_node<name>{}>{}; }
+
+    template<fixed_string name = "", typename... Ts>
+    constexpr static auto any_of() { return pattern_impl<ce_any_of_node<name, Ts...>{}>{}; }
+
+    template<fixed_string name = "", typename... Ts>
+    constexpr static auto none_of() { return pattern_impl<ce_none_of_node<name, Ts...>{}>{}; }
 
     template<fixed_string name = "">
     constexpr static auto var() { return pattern_impl<ce_symbol_node<name>{}>{}; }
@@ -256,7 +281,7 @@ struct ce_matcher
     }
 
     template<auto arg, auto... args>
-    constexpr static bool check_argument(auto& ctx, const auto& arguments, size_t i = 0u)
+    constexpr static bool check_argument(auto& ctx, const auto& arguments, std::size_t i = 0u)
     {
         if constexpr (sizeof...(args) > 0)
             return arg.matches(ctx, arguments[i]) &&
@@ -290,6 +315,26 @@ struct ce_matcher
                                      const node& node,
                                      const ce_const_var<s>&,
                                      const constant_node& actual_node)
+    {
+        return check_or_insert_pattern_context<s>(ctx, node, actual_node);
+    }
+
+    template<auto s, typename T, typename... Ts>
+        requires(std::is_same_v<T, Ts> || ...)
+    constexpr static bool operator()(auto& ctx,
+                                     const node& node,
+                                     const ce_any_of_node<s, Ts...>&,
+                                     const T& actual_node)
+    {
+        return check_or_insert_pattern_context<s>(ctx, node, actual_node);
+    }
+
+    template<auto s, typename T, typename... Ts>
+        requires((!std::is_same_v<T, Ts>) && ...)
+    constexpr static bool operator()(auto& ctx,
+                                     const node& node,
+                                     const ce_none_of_node<s, Ts...>&,
+                                     const T& actual_node)
     {
         return check_or_insert_pattern_context<s>(ctx, node, actual_node);
     }

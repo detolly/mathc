@@ -12,7 +12,7 @@ using rewriter_algorithm_fn_t = bool(&)(pattern_rewriter_fn_t, node&);
 template<auto _pattern, auto rewriter>
 struct pattern_strategy
 {
-    constexpr static bool try_rewrite(node& node)
+    constexpr static inline bool try_rewrite(node& node)
     {
         pattern_context<_pattern.extent()> ctx;
         if (_pattern.matches(ctx, node)) {
@@ -48,12 +48,12 @@ struct extra_rewrites_t
     constexpr inline bool operator()(auto&) { return false; }
 };
 
-constexpr static bool _top_down_rewrite(pattern_rewriter_fn_t fn, node& node)
+constexpr static inline bool _top_down_rewrite(pattern_rewriter_fn_t fn, node& node)
 {
     return fn(node) || std::visit(extra_rewrites_t{ _top_down_rewrite, fn }, node);
 }
 
-constexpr static bool _bottom_up_rewrite(pattern_rewriter_fn_t fn, node& node)
+constexpr static inline bool _bottom_up_rewrite(pattern_rewriter_fn_t fn, node& node)
 {
     const auto did_rewrite = std::visit(extra_rewrites_t{ _bottom_up_rewrite, fn }, node);
     return fn(node) || did_rewrite;
