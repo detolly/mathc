@@ -45,49 +45,36 @@ constexpr static inline bool is_commutative(operation_type type)
 template<fixed_string s>
 struct ce_any_node
 {
-    constexpr static auto name() { return s; }
     constexpr static size_t extent() { return 1; }
 };
 
 template<fixed_string s>
 struct ce_symbol_node
 {
-    constexpr static auto name() { return s; }
     constexpr static size_t extent() { return 1; }
 };
 
 template<fixed_string s>
 struct ce_const_var
 {
-    constexpr static auto name() { return s; }
     constexpr static size_t extent() { return 1; }
 };
 
 template<auto n, fixed_string _name>
 struct ce_const_value
 {
-    constexpr static auto name() { return _name; }
-    constexpr static auto value() { return n; }
     constexpr static size_t extent() { return 1; }
 };
 
-template<auto _left, auto _right, operation_type type, fixed_string _name>
+template<auto _left, auto _right, operation_type type, fixed_string _name, bool should_match_commutative>
 struct ce_op_node
 {
-    constexpr static auto name() { return _name; }
-    constexpr static auto left() { return _left; }
-    constexpr static auto right() { return _right; }
-    constexpr static auto operation() { return type; }
-
     constexpr static size_t extent() { return 1 + _right.extent() + _left.extent(); }
 };
 
 template<fixed_string _function_name, fixed_string _name, auto... args>
 struct ce_func_node
 {
-    constexpr static auto function_name() { return _function_name; }
-    constexpr static auto name() { return _name; }
-
     constexpr static size_t extent() { return 1 + (args.extent() + ...); }
 };
 
@@ -155,32 +142,31 @@ struct pattern_impl
 {
     constexpr static auto extent() { return n.extent(); }
 
-    template<fixed_string name = "", typename T> consteval static auto mul(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto mul(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::mul, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::mul, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", typename T> consteval static auto div(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto div(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::div, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::div, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", typename T> consteval static auto add(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto add(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::add, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::add, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", typename T> consteval static auto sub(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto sub(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::sub, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::sub, name, should_match_commutative>{}>{};
     }
 
-    template<fixed_string name = "", typename T> consteval static auto exp(const T&)
+    template<fixed_string name = "", bool should_match_commutative = true, typename T> consteval static auto exp(const T&)
     {
-        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::exp, name>{}>{};
+        return pattern_impl<ce_op_node<pattern_impl<n>{}, T{}, operation_type::exp, name, should_match_commutative>{}>{};
     }
 
-    template<bool should_match_commutative>
     constexpr static inline bool matches(auto& ctx, const node&);
 };
 
@@ -202,11 +188,10 @@ struct pattern
     template<fixed_string function_name, fixed_string name = "", typename... Args>
     constexpr static auto func(const Args&...) { return pattern_impl<ce_func_node<function_name, name, Args{}...>{}>{}; }
 
-    template<operation_type type, fixed_string s = "", typename Left, typename Right>
-    constexpr static auto op(const Left&, const Right&) { return pattern_impl<ce_op_node<Left{}, Right{}, type, s>{}>{}; }
+    template<operation_type type, fixed_string s = "", bool should_match_commuative = true, typename Left, typename Right>
+    constexpr static auto op(const Left&, const Right&) { return pattern_impl<ce_op_node<Left{}, Right{}, type, s, should_match_commuative>{}>{}; }
 };
 
-template<bool should_match_commutative>
 struct ce_matcher
 {
 
@@ -242,17 +227,17 @@ struct ce_matcher
         return false;
     }
 
-    template<auto left, auto right, operation_type type, fixed_string name>
+    template<auto left, auto right, operation_type type, fixed_string name, bool should_match_commutative>
     constexpr static bool operator()(auto& ctx,
                                      const node& _node,
-                                     const ce_op_node<left, right, type, name>&,
+                                     const ce_op_node<left, right, type, name, should_match_commutative>&,
                                      const op_node& op)
     {
         if (op.type != type)
             return false;
 
         auto original_index = ctx.index;
-        if (left.template matches<should_match_commutative>(ctx, *op.left) && right.template matches<should_match_commutative>(ctx, *op.right)) {
+        if (left.matches(ctx, *op.left) && right.matches(ctx, *op.right)) {
             ctx.insert(hash(name.view()), hash(_node), _node);
             return true;
         }
@@ -261,7 +246,7 @@ struct ce_matcher
         if constexpr (!should_match_commutative || !is_commutative(type))
             return false;
 
-        if (left.template matches<should_match_commutative>(ctx, *op.right) && right.template matches<should_match_commutative>(ctx, *op.left)) {
+        if (left.matches(ctx, *op.right) && right.matches(ctx, *op.left)) {
             ctx.insert(hash(name.view()), hash(_node), _node);
             return true;
         }
@@ -274,10 +259,10 @@ struct ce_matcher
     constexpr static bool check_argument(auto& ctx, const auto& arguments, size_t i = 0u)
     {
         if constexpr (sizeof...(args) > 0)
-            return arg.template matches<should_match_commutative>(ctx, arguments[i]) &&
+            return arg.matches(ctx, arguments[i]) &&
                    check_argument<args...>(ctx, arguments, i + 1);
 
-        return arg.template matches<should_match_commutative>(ctx, arguments[i]);
+        return arg.matches(ctx, arguments[i]);
     }
 
     template<auto fn_name, auto name, auto... args>
@@ -338,11 +323,10 @@ struct ce_matcher
 };
 
 template<auto ce_node>
-template<bool should_match_commutative>
 constexpr inline bool pattern_impl<ce_node>::matches(auto& ctx, const node& node)
 {
     return std::visit([&node, &ctx](const auto& actual_node) {
-        return ce_matcher<should_match_commutative>{}(ctx, node, ce_node, actual_node);
+        return ce_matcher{}(ctx, node, ce_node, actual_node);
     }, node);
 }
 
@@ -359,7 +343,7 @@ constexpr static inline bool pattern_test(const std::string_view source, const T
 
     pattern_context<T::extent()> ctx;
     const auto& node = node_result.value();
-    return T::template matches<true>(ctx, node);
+    return T::matches(ctx, node);
 }
 
 #ifndef NO_TEST
