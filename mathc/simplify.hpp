@@ -11,6 +11,22 @@
 namespace mathc
 {
 
+constexpr static inline node operate(const node& a_node, const node& b_node, operation_type type)
+{
+    const auto& a = std::get<constant_node>(a_node).value;
+    const auto& b = std::get<constant_node>(b_node).value;
+
+    switch(type) {
+        case operation_type::mul: return make_node<constant_node>(a * b);
+        case operation_type::div: return make_node<constant_node>(a / b);
+        case operation_type::add: return make_node<constant_node>(a + b);
+        case operation_type::sub: return make_node<constant_node>(a - b);
+        case operation_type::exp: return make_node<constant_node>(a ^ b);
+    }
+
+    std::unreachable();
+}
+
 template<auto _pattern, auto _rewriter>
 using p = pattern_strategy<_pattern, _rewriter>;
 
