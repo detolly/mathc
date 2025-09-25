@@ -43,7 +43,7 @@ constexpr static auto simplify_rewriter = rewriter<
     // NOTE: Reorder
 
     // not_c * c = c * not_c
-    p<pattern::none_of<"x", constant_node>().mul<"mul1", false>(pattern::cvar<"c">()), [](const auto& ctx) {
+    p<pattern::none_of<"x", constant_node>().mul<"mul1", match_commutative::no>(pattern::cvar<"c">()), [](const auto& ctx) {
         auto& mul1_op = std::get<op_node>(get("mul1"));
         std::swap(mul1_op.left, mul1_op.right);
     }>{},

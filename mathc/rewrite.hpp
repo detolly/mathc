@@ -14,7 +14,7 @@ struct pattern_strategy
 {
     constexpr static inline bool try_rewrite(node& node)
     {
-        pattern_context<_pattern.extent()> ctx;
+        pattern_context<_pattern> ctx;
         if (_pattern.matches(ctx, node)) {
             rewriter(ctx);
             return true;
