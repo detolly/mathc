@@ -259,10 +259,25 @@ struct pattern
         requires(number_type<decltype(number)>)
     constexpr static auto constant() { return pattern_impl<ce_const_value<number, s, 0>{}>{}; }
 
-    // FIXME: arguments don't get incremented
+    template<std::size_t I, typename... Ts>
+    struct offset
+    {
+        constexpr static std::size_t value = 1 + offset<I-1, Ts...>::value + std::tuple_element_t<I-1, std::tuple<Ts...>>::extent();
+    };
+
+    template<typename... Ts>
+    struct offset<0, Ts...>
+    {
+        constexpr static std::size_t value = 1;
+    };
 
     template<fixed_string function_name, fixed_string name = "", typename... Args>
-    constexpr static auto func(const Args&...) { return pattern_impl<ce_func_node<function_name, name, 0, Args{}...>{}>{}; }
+    constexpr static auto func(const Args&...) {
+        return []<std::size_t... Is>(std::index_sequence<Is...>) {
+            return pattern_impl<ce_func_node<function_name, name, 0,
+                   Args::template increment<offset<Is, Args...>::value>()...>{}>{};
+        }(std::index_sequence_for<Args...>{});
+    }
 
     template<operation_type type, fixed_string s = "", match_commutative mc = match_commutative::yes, typename Left, typename Right>
     constexpr static auto op(const Left&, const Right&) { return pattern_impl<ce_op_node<Left::template increment<1>(), Right::template increment<Left::extent() + 1>(), type, s, mc, 0>{}>{}; }

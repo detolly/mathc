@@ -15,7 +15,7 @@ namespace mathc
 
 struct parse_error
 {
-    token token;
+    token tok;
     std::string error;
 };
 

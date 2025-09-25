@@ -137,7 +137,7 @@ int main(int argc, const char* argv[])
     auto root_node_result = mathc::parser::parse(std::span{ tokens });
     if (!root_node_result.has_value()) {
         const auto& error = root_node_result.error();
-        std::println(stderr, "{} | token: {} {}", error.error, error.token.value, token_type_str(error.token.type));
+        std::println(stderr, "{} | token: {} {}", error.error, error.tok.value, token_type_str(error.tok.type));
         return 1;
     }
 
