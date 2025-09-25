@@ -466,7 +466,7 @@ static_assert(pattern_test("1", pattern::cvar()));
 static_assert(pattern_test("1+1", pattern::constant<1>().add(pattern::constant<1>())));
 static_assert(pattern_test("5*2", pattern::any<"x">().mul(pattern::constant<2>())));
 static_assert(pattern_test("5*2", pattern::any<"x">().mul(pattern::constant<5>()))); // commutativity
-// static_assert(pattern_test("sqrt(2)", pattern::func<"sqrt">(pattern::cvar())));
+static_assert(pattern_test("sqrt(2)", pattern::func<"sqrt">(pattern::cvar())));
 static_assert(pattern_test("x", pattern::var()));
 #endif
 
