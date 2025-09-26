@@ -169,8 +169,10 @@ struct pattern_context
     consteval static std::size_t get_index()
     {
         constexpr static auto result = pattern.template find<str>();
-        if constexpr (result == -1)
-            static_assert(false, "Name was not found");
+        if constexpr (result < 0) { 
+            static_assert(false, fixed_string{ "Pattern name does not exist: " }.concat<str>());
+            return 0; // std::unreachable does not work here
+        }
 
         return static_cast<std::size_t>(result);
     }
